@@ -24,7 +24,7 @@ export default function RegisterUser() {
     }
   };
 
-  if (!user || user.email !== adminEmail) {
+  if (!user || !adminEmail.includes(user.email)) {
     return (
       <Container maxWidth="sm">
         <Box mt={10}>

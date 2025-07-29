@@ -13,22 +13,25 @@ import {
   IconButton,
   Chip,
   InputAdornment,
+  Modal,
+  Paper,
+  Divider
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import LogoutIcon from "@mui/icons-material/Logout";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import { getAuth, signOut } from "firebase/auth";
 import { getDocs, collection, deleteDoc, doc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
-import { PieChart, Pie, Tooltip, ResponsiveContainer } from "recharts";
-
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function Dashboard() {
   const [data, setData] = useState([]);
   const [filtro, setFiltro] = useState("");
+  const [openReporte, setOpenReporte] = useState(false);
   const navigate = useNavigate();
   const auth = getAuth();
   const { user } = useAuth();
@@ -50,7 +53,6 @@ export default function Dashboard() {
     );
     if (confirmar) {
       await deleteDoc(doc(db, "participantes", id));
-      // alert("Participante eliminado");
       cargarDatos();
     }
   };
@@ -75,21 +77,10 @@ export default function Dashboard() {
   const totalParticipantes = data.length;
   const pagados = data.filter((p) => p.pago).length;
   const pendientes = totalParticipantes - pagados;
-
-  const formasPagoData = [
-    {
-      name: "Pago móvil",
-      value: data.filter((p) => p.formaPago === "Pago movil").length,
-    },
-    {
-      name: "Efectivo",
-      value: data.filter((p) => p.formaPago === "Efectivo").length,
-    },
-    {
-      name: "Zelle",
-      value: data.filter((p) => p.formaPago === "Zelle").length,
-    },
-  ].filter((f) => f.value > 0);
+  const costoCongreso = 8;
+  const montoRecaudado = pagados * costoCongreso;
+  const montoPendiente = pendientes * costoCongreso;
+  const montoTotal = totalParticipantes * costoCongreso;
 
   return (
     <Container maxWidth="lg">
@@ -101,13 +92,23 @@ export default function Dashboard() {
         alignItems="center"
       >
         <Typography variant="h4">Participantes Registrados</Typography>
-        <Button
-          variant="outlined"
-          startIcon={<LogoutIcon />}
-          onClick={handleLogout}
-        >
-          Cerrar sesión
-        </Button>
+        <Box display="flex" alignItems="center" gap={2}>
+          {user?.email && (
+            <Box display="flex" alignItems="center" gap={1}>
+              <AccountCircleIcon fontSize="small" color="action" />
+              <Typography variant="body2" color="text.secondary">
+                {user.email}
+              </Typography>
+            </Box>
+          )}
+          <Button
+            variant="outlined"
+            startIcon={<LogoutIcon />}
+            onClick={handleLogout}
+          >
+            Cerrar sesión
+          </Button>
+        </Box>
       </Box>
 
       {/* RESUMEN NUMÉRICO */}
@@ -130,43 +131,56 @@ export default function Dashboard() {
         </Box>
       </Box>
 
-      {/* GRÁFICO DE FORMAS DE PAGO */}
-      {/* {pagados > 0 && formasPagoData.length > 0 && (
-        <Box mb={5} height={300}>
-          <Typography variant="h6" gutterBottom>Formas de pago entre participantes que ya pagaron</Typography>
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={formasPagoData}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                outerRadius={100}
-                fill="#1976d2"
-                label
-              />
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </Box>
-      )} */}
-
       {/* BOTONES SUPERIORES */}
       <Box display="flex" gap={2} mb={2}>
-        <Button variant="contained" onClick={() => navigate("/registrar")}>
+        <Button variant="contained" onClick={() => navigate("/registrar")}> 
           Registrar participante
         </Button>
         {user?.email && adminEmail.includes(user.email) && (
-          <Button
-            variant="outlined"
-            color="secondary"
-            onClick={() => navigate("/registrar-usuario")}
-          >
-            Registrar usuario
-          </Button>
+          <>
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={() => setOpenReporte(true)}
+            >
+              Ver reporte financiero
+            </Button>
+            <Button
+              variant="outlined"
+              color="secondary"
+              onClick={() => navigate("/registrar-usuario")}
+            >
+              Registrar usuario
+            </Button>
+          </>
         )}
       </Box>
+      {/* MODAL DE REPORTE SOLO PARA ADMIN */}
+      {user?.email && adminEmail.includes(user.email) && (
+        <Modal open={openReporte} onClose={() => setOpenReporte(false)}>
+          <Paper sx={{ maxWidth: 400, mx: "auto", mt: 10, p: 4, borderRadius: 3, boxShadow: 6 }}>
+            <Typography variant="h5" fontWeight="bold" gutterBottom color="primary.main">
+              Reporte financiero del Congreso
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+            <Box mb={2}>
+              <Typography variant="body1"><b>Participantes inscritos:</b> {totalParticipantes}</Typography>
+              <Typography variant="body1" color="success.main"><b>Pagados:</b> {pagados}</Typography>
+              <Typography variant="body1" color="warning.main"><b>Pendientes:</b> {pendientes}</Typography>
+            </Box>
+            <Divider sx={{ mb: 2 }} />
+            <Box mb={2}>
+              <Typography variant="body1"><b>Monto recaudado:</b> ${montoRecaudado.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Typography>
+              <Typography variant="body1"><b>Monto pendiente:</b> ${montoPendiente.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Typography>
+              <Typography variant="body1" color="primary"><b>Total potencial:</b> ${montoTotal.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Typography>
+            </Box>
+            <Divider sx={{ mb: 2 }} />
+            <Button variant="contained" color="primary" fullWidth onClick={() => setOpenReporte(false)}>
+              Cerrar
+            </Button>
+          </Paper>
+        </Modal>
+      )}
 
       {/* FILTRO */}
       <TextField

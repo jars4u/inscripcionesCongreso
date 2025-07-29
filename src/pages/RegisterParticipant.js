@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
 import {
   Container,
   TextField,
@@ -32,6 +32,8 @@ export default function RegisterParticipant() {
   const [segundaFormaPago, setSegundaFormaPago] = useState('');
   const [referencia2, setReferencia2] = useState('');
   const [zelleInfo2, setZelleInfo2] = useState('');
+  const [errorCedula, setErrorCedula] = useState('');
+  const [errorCampos, setErrorCampos] = useState('');
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -54,12 +56,23 @@ export default function RegisterParticipant() {
   };
 
   const handleSubmit = async () => {
-    if (!nombre || !apellido || !cedula || !telefono) {
-      // alert('Todos los campos son obligatorios');
+    setErrorCampos('');
+    if (!nombre || !apellido || !cedula || !telefono || !fechaNacimiento) {
+      setErrorCampos('Por favor, completa todos los campos obligatorios.');
       return;
     }
-
+    if (errorCedula) {
+      setErrorCampos('Corrige el campo de cédula antes de continuar.');
+      return;
+    }
     try {
+      // Validar que la cédula no esté repetida
+      const q = query(collection(db, 'participantes'), where('cedula', '==', cedula));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        setErrorCampos('Ya existe un participante con esa cédula.');
+        return;
+      }
       await addDoc(collection(db, 'participantes'), {
         nombre,
         apellido,
@@ -77,10 +90,9 @@ export default function RegisterParticipant() {
         registradoPor: user.email,
         timestamp: serverTimestamp()
       });
-      // alert('Participante registrado correctamente');
       navigate('/dashboard');
     } catch (error) {
-      // alert('Error al registrar participante: ' + error.message);
+      setErrorCampos('Error al registrar participante.');
     }
   };
 
@@ -106,8 +118,19 @@ export default function RegisterParticipant() {
           fullWidth
           label="Cédula"
           value={cedula}
-          onChange={(e) => setCedula(e.target.value)}
+          error={!!errorCedula}
+          helperText={errorCedula}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (/[^0-9]/.test(val)) {
+              setErrorCedula('Solo se permiten números, sin letras ni puntuación');
+            } else {
+              setErrorCedula('');
+            }
+            setCedula(val.replace(/[^0-9]/g, ''));
+          }}
           margin="normal"
+          inputProps={{ inputMode: 'numeric', pattern: '[0-9]*' }}
         />
         <TextField
           fullWidth
@@ -213,6 +236,9 @@ export default function RegisterParticipant() {
               </>
             )}
           </>
+        )}
+        {errorCampos && (
+          <Typography color="error" sx={{ mb: 2 }}>{errorCampos}</Typography>
         )}
         <Button variant="contained" fullWidth sx={{ mt: 2 }} onClick={handleSubmit}>
           Registrar

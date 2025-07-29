@@ -7,14 +7,16 @@ import { useNavigate } from 'react-router-dom';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const login = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      setError('');
       navigate('/dashboard');
     } catch (err) {
-      // alert('Error al iniciar sesión: ' + err.message);
+      setError('Correo o contraseña incorrectos');
     }
   };
 
@@ -38,6 +40,9 @@ export default function Login() {
         </Box>
       <Box mt={10}>
         <Typography variant="h4" gutterBottom>Iniciar Sesión</Typography>
+        {error && (
+          <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>
+        )}
         <TextField
           fullWidth
           label="Correo electrónico"
@@ -52,6 +57,9 @@ export default function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           margin="normal"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') login();
+          }}
         />
         <Button variant="contained" fullWidth onClick={login} sx={{ mt: 2 }}>
           Entrar
