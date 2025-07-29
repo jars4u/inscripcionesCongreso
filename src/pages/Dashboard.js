@@ -58,7 +58,7 @@ export default function Dashboard() {
   const handleLogout = () => {
     signOut(auth)
       .then(() => {
-        navigate("/login");
+        navigate("/");
       })
       .catch((error) => {
         console.error("Error al cerrar sesión:", error);
@@ -157,7 +157,7 @@ export default function Dashboard() {
         <Button variant="contained" onClick={() => navigate("/registrar")}>
           Registrar participante
         </Button>
-        {user?.email === adminEmail && (
+        {user?.email && adminEmail.includes(user.email) && (
           <Button
             variant="outlined"
             color="secondary"
