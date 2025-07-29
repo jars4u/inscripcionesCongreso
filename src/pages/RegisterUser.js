@@ -17,10 +17,10 @@ export default function RegisterUser() {
   const register = async () => {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
-      // alert('Usuario creado exitosamente');
+      alert('Usuario creado exitosamente');
       navigate('/dashboard');
     } catch (err) {
-      // alert('Error al registrar usuario: ' + err.message);
+      alert('Error al registrar usuario: ' + err.message);
     }
   };
 

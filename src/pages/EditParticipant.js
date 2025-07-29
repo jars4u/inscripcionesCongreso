@@ -25,6 +25,8 @@ import {
 import { db } from '../firebase';
 
 export default function EditParticipant() {
+  // Función para capitalizar cada palabra
+  const capitalizeWords = (str) => str.replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -168,7 +170,7 @@ export default function EditParticipant() {
           fullWidth
           label="Nombre"
           value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
+          onChange={(e) => setNombre(capitalizeWords(e.target.value))}
           margin="normal"
           error={!!errores.nombre}
           helperText={errores.nombre}
@@ -178,7 +180,7 @@ export default function EditParticipant() {
           fullWidth
           label="Apellido"
           value={apellido}
-          onChange={(e) => setApellido(e.target.value)}
+          onChange={(e) => setApellido(capitalizeWords(e.target.value))}
           margin="normal"
           error={!!errores.apellido}
           helperText={errores.apellido}

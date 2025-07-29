@@ -20,6 +20,8 @@ import { useAuth } from '../contexts/AuthContext';
 export default function RegisterParticipant() {
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
+  // Función para capitalizar cada palabra
+  const capitalizeWords = (str) => str.replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
   const [cedula, setCedula] = useState('');
   const [telefono, setTelefono] = useState('');
   const [fechaNacimiento, setFechaNacimiento] = useState('');
@@ -104,14 +106,14 @@ export default function RegisterParticipant() {
           fullWidth
           label="Nombre"
           value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
+          onChange={(e) => setNombre(capitalizeWords(e.target.value))}
           margin="normal"
         />
         <TextField
           fullWidth
           label="Apellido"
           value={apellido}
-          onChange={(e) => setApellido(e.target.value)}
+          onChange={(e) => setApellido(capitalizeWords(e.target.value))}
           margin="normal"
         />
         <TextField

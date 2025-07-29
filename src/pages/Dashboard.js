@@ -32,6 +32,8 @@ export default function Dashboard() {
   const [data, setData] = useState([]);
   const [filtro, setFiltro] = useState("");
   const [openReporte, setOpenReporte] = useState(false);
+  const [sortColumn, setSortColumn] = useState("nombre");
+  const [sortDirection, setSortDirection] = useState("asc");
   const navigate = useNavigate();
   const auth = getAuth();
   const { user } = useAuth();
@@ -68,11 +70,28 @@ export default function Dashboard() {
   };
 
   // Filtros y datos procesados
-  const datosFiltrados = data.filter((p) =>
-    (p.nombre + " " + p.apellido + " " + p.cedula)
-      .toLowerCase()
-      .includes(filtro.toLowerCase())
-  );
+  // Filtrar y ordenar datos
+  const datosFiltrados = data
+    .filter((p) =>
+      (p.nombre + " " + p.apellido + " " + p.cedula)
+        .toLowerCase()
+        .includes(filtro.toLowerCase())
+    )
+    .sort((a, b) => {
+      let valA = a[sortColumn];
+      let valB = b[sortColumn];
+      // Si es número, comparar como número
+      if (["edad", "cedula", "telefono", "pagados", "pendientes"].includes(sortColumn)) {
+        valA = Number(valA) || 0;
+        valB = Number(valB) || 0;
+      } else {
+        valA = (valA || "").toString().toLowerCase();
+        valB = (valB || "").toString().toLowerCase();
+      }
+      if (valA < valB) return sortDirection === "asc" ? -1 : 1;
+      if (valA > valB) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
 
   const totalParticipantes = data.length;
   const pagados = data.filter((p) => p.pago).length;
@@ -318,6 +337,39 @@ export default function Dashboard() {
         }}
       />
 
+      {/* FILTROS DE ORDENAMIENTO */}
+      <Box display="flex" gap={2} mb={2} flexWrap="wrap">
+        <TextField
+          select
+          label="Ordenar por"
+          value={sortColumn}
+          onChange={e => setSortColumn(e.target.value)}
+          SelectProps={{ native: true }}
+          size="small"
+          sx={{ minWidth: 120 }}
+        >
+          <option value="nombre">Nombre</option>
+          <option value="apellido">Apellido</option>
+          <option value="cedula">Cédula</option>
+          <option value="telefono">Teléfono</option>
+          <option value="edad">Edad</option>
+          <option value="pago">Pago</option>
+          <option value="formaPago">Forma de pago</option>
+          <option value="registradoPor">Registrado por</option>
+        </TextField>
+        <TextField
+          select
+          label="Dirección"
+          value={sortDirection}
+          onChange={e => setSortDirection(e.target.value)}
+          SelectProps={{ native: true }}
+          size="small"
+          sx={{ minWidth: 120 }}
+        >
+          <option value="asc">Ascendente</option>
+          <option value="desc">Descendente</option>
+        </TextField>
+      </Box>
       {/* TABLA */}
       <Box sx={{ width: "100%", overflowX: "auto" }}>
         <Table sx={{ minWidth: 650 }}>
