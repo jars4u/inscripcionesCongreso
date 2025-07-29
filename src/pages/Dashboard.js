@@ -32,7 +32,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const auth = getAuth();
   const { user } = useAuth();
-  const adminEmail = "jars4u2@gmail.com";
+  const adminEmail = ["jars4u2@gmail.com", "carlosurdaneta@gmail.com"];
 
   const cargarDatos = async () => {
     const snapshot = await getDocs(collection(db, "participantes"));

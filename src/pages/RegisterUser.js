@@ -12,7 +12,7 @@ export default function RegisterUser() {
   const navigate = useNavigate();
 
   // Cambia este email por el ADMINISTRADOR que puede registrar usuarios
-  const adminEmail = "jars4u2@gmail.com";
+  const adminEmail = ["jars4u2@gmail.com", "carlosurdaneta@gmail.com"];
 
   const register = async () => {
     try {
