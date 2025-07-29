@@ -96,7 +96,12 @@ export default function Dashboard() {
         <Typography
           variant="h4"
           order={{ xs: 2, sm: 1 }}
-          sx={{ whiteSpace: "nowrap" }}
+          sx={{
+            whiteSpace: "nowrap",
+            fontSize: { xs: 28, sm: 32, md: 36 },
+            textAlign: { xs: "center", sm: "inherit" },
+            fontWeight: "bold",
+          }}
         >
           Participantes Registrados
         </Typography>
