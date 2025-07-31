@@ -56,7 +56,7 @@ export default function Dashboard() {
     setLoadingTasa(true);
     try {
       // Usamos el proxy local para obtener la tasa del BCV y evitar CORS
-      const response = await fetch("http://localhost:4000/api/tasa-bcv");
+      const response = await fetch("https://pydolarve.org/api/v1/dollar?page=bcv&monitor=usd");
       const data = await response.json();
       if (data && data.price) {
         setTasaBCV(data.price);
