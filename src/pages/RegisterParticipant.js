@@ -106,45 +106,49 @@ export default function RegisterParticipant() {
     <Container maxWidth="sm">
       <Box mt={5}>
         <Typography variant="h4" gutterBottom>Registrar Participante</Typography>
-        <TextField
-          fullWidth
-          label="Nombre"
-          value={nombre}
-          onChange={(e) => setNombre(capitalizeWords(e.target.value))}
-          margin="normal"
-        />
-        <TextField
-          fullWidth
-          label="Apellido"
-          value={apellido}
-          onChange={(e) => setApellido(capitalizeWords(e.target.value))}
-          margin="normal"
-        />
-        <TextField
-          fullWidth
-          label="Cédula"
-          value={cedula}
-          error={!!errorCedula}
-          helperText={errorCedula}
-          onChange={(e) => {
-            const val = e.target.value;
-            if (/[^0-9]/.test(val)) {
-              setErrorCedula('Solo se permiten números, sin letras ni puntuación');
-            } else {
-              setErrorCedula('');
-            }
-            setCedula(val.replace(/[^0-9]/g, ''));
-          }}
-          margin="normal"
-          inputProps={{ inputMode: 'numeric', pattern: '[0-9]*' }}
-        />
-        <TextField
-          fullWidth
-          label="Teléfono"
-          value={telefono}
-          onChange={(e) => setTelefono(e.target.value)}
-          margin="normal"
-        />
+        <Box display="flex" gap={2} mb={2}>
+          <TextField
+            fullWidth
+            label="Nombre"
+            value={nombre}
+            onChange={(e) => setNombre(capitalizeWords(e.target.value))}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Apellido"
+            value={apellido}
+            onChange={(e) => setApellido(capitalizeWords(e.target.value))}
+            margin="normal"
+          />
+        </Box>
+        <Box display="flex" gap={2} mb={2}>
+          <TextField
+            fullWidth
+            label="Cédula"
+            value={cedula}
+            error={!!errorCedula}
+            helperText={errorCedula}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (/[^0-9]/.test(val)) {
+                setErrorCedula('Solo se permiten números, sin letras ni puntuación');
+              } else {
+                setErrorCedula('');
+              }
+              setCedula(val.replace(/[^0-9]/g, ''));
+            }}
+            margin="normal"
+            inputProps={{ inputMode: 'numeric', pattern: '[0-9]*' }}
+          />
+          <TextField
+            fullWidth
+            label="Teléfono"
+            value={telefono}
+            onChange={(e) => setTelefono(e.target.value)}
+            margin="normal"
+          />
+        </Box>
         {/* Fecha de nacimiento y edad */}
         <Box display="flex" alignItems="center" gap={2}>
           <TextField

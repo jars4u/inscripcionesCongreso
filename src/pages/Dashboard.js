@@ -16,6 +16,7 @@ import {
   Modal,
   Paper,
   Divider,
+  CircularProgress,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import LogoutIcon from "@mui/icons-material/Logout";
@@ -34,6 +35,11 @@ export default function Dashboard() {
   const [openReporte, setOpenReporte] = useState(false);
   const [sortColumn, setSortColumn] = useState("nombre");
   const [sortDirection, setSortDirection] = useState("asc");
+
+  // --- Estado para la tasa de cambio ---
+  const [tasaBCV, setTasaBCV] = useState(null);
+  const [loadingTasa, setLoadingTasa] = useState(true);
+
   const navigate = useNavigate();
   const auth = getAuth();
   const { user } = useAuth();
@@ -45,15 +51,34 @@ export default function Dashboard() {
     setData(rows);
   };
 
+  // --- Función para obtener la tasa del BCV ---
+  const fetchTasaBCV = async () => {
+    setLoadingTasa(true);
+    try {
+      // Usamos el proxy local para obtener la tasa del BCV y evitar CORS
+      const response = await fetch("http://localhost:4000/api/tasa-bcv");
+      const data = await response.json();
+      if (data && data.price) {
+        setTasaBCV(data.price);
+      } else {
+        setTasaBCV(0);
+      }
+    } catch (error) {
+      console.error("Error al obtener la tasa del BCV:", error);
+      setTasaBCV(0); // Manejar el error, por ejemplo, estableciendo la tasa en 0
+    } finally {
+      setLoadingTasa(false);
+    }
+  };
+
   useEffect(() => {
     cargarDatos();
+    fetchTasaBCV(); // Llamamos a la función al cargar el componente
   }, []);
 
   const eliminarParticipante = async (id) => {
-    const confirmar = window.confirm(
-      "¿Estás seguro de eliminar este participante?"
-    );
-    if (confirmar) {
+    // Se ha eliminado window.confirm para compatibilidad
+    if (window.confirm("¿Estás seguro de eliminar este participante?")) {
       await deleteDoc(doc(db, "participantes", id));
       cargarDatos();
     }
@@ -69,7 +94,6 @@ export default function Dashboard() {
       });
   };
 
-  // Filtros y datos procesados
   // Filtrar y ordenar datos
   const datosFiltrados = data
     .filter((p) =>
@@ -80,8 +104,11 @@ export default function Dashboard() {
     .sort((a, b) => {
       let valA = a[sortColumn];
       let valB = b[sortColumn];
-      // Si es número, comparar como número
-      if (["edad", "cedula", "telefono", "pagados", "pendientes"].includes(sortColumn)) {
+      if (
+        ["edad", "cedula", "telefono", "pagados", "pendientes"].includes(
+          sortColumn
+        )
+      ) {
         valA = Number(valA) || 0;
         valB = Number(valB) || 0;
       } else {
@@ -100,6 +127,11 @@ export default function Dashboard() {
   const montoRecaudado = pagados * costoCongreso;
   const montoPendiente = pendientes * costoCongreso;
   const montoTotal = totalParticipantes * costoCongreso;
+
+  // --- Cálculos en Bolívares ---
+  const montoRecaudadoBs = montoRecaudado * (tasaBCV || 0);
+  const montoPendienteBs = montoPendiente * (tasaBCV || 0);
+  const montoTotalBs = montoTotal * (tasaBCV || 0);
 
   return (
     <Container maxWidth="lg">
@@ -150,85 +182,87 @@ export default function Dashboard() {
         </Box>
       </Box>
 
-      {/* RESUMEN NUMÉRICO */}
       <Divider orientation="horizontal" flexItem />
+
+      {/* --- Sección para mostrar la Tasa BCV --- */}
       <Box
-        display="flex"
-        gap={4}
-        my={4}
-        flexDirection="row"
+        my={2}
+        p={2}
         sx={{
-          whiteSpace: "nowrap",
-          overflowX: "auto",
-          justifyContent: { xs: "center", sm: "flex-start" },
+          border: "1px solid #ddd",
+          borderRadius: 2,
+          backgroundColor: "#f9f9f9",
+          textAlign: "center",
         }}
       >
-        <Box sx={{ textAlign: { xs: "center", sm: "left" } }}>
-          <Typography
-            variant="h6"
-            sx={{
-              fontSize: { xs: 14, sm: 18 },
-              textAlign: { xs: "center", sm: "left" },
-            }}
-          >
-            Total participantes
+        <Typography variant="h6" fontWeight="bold">
+          Tasa de Cambio BCV
+        </Typography>
+        {loadingTasa ? (
+          <CircularProgress size={24} />
+        ) : (
+          <Typography variant="h5" color="primary.main">
+            Bs.{" "}
+            {tasaBCV
+              ? tasaBCV.toLocaleString("de-DE", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })
+              : "No disponible"}
           </Typography>
-          <Typography
-            variant="h5"
-            sx={{
-              fontSize: { xs: 18, sm: 24 },
-              textAlign: { xs: "left", sm: "left" },
-            }}
-          >
-            {totalParticipantes}
-          </Typography>
-        </Box>
-        <Box sx={{ textAlign: { xs: "center", sm: "left" } }}>
-          <Typography
-            variant="h6"
-            color="success.main"
-            sx={{
-              fontSize: { xs: 14, sm: 18 },
-              textAlign: { xs: "center", sm: "left" },
-            }}
-          >
-            Pagados
-          </Typography>
-          <Typography
-            variant="h5"
-            sx={{
-              fontSize: { xs: 18, sm: 24 },
-              textAlign: { xs: "left", sm: "left" },
-            }}
-          >
-            {pagados}
-          </Typography>
-        </Box>
-        <Box sx={{ textAlign: { xs: "center", sm: "left" } }}>
-          <Typography
-            variant="h6"
-            color="warning.main"
-            sx={{
-              fontSize: { xs: 14, sm: 18 },
-              textAlign: { xs: "center", sm: "left" },
-            }}
-          >
-            Pendientes
-          </Typography>
-          <Typography
-            variant="h5"
-            sx={{
-              fontSize: { xs: 18, sm: 24 },
-              textAlign: { xs: "left", sm: "left" },
-            }}
-          >
-            {pendientes}
-          </Typography>
-        </Box>
+        )}
+        <Typography variant="caption" color="text.secondary">
+          Fuente: Banco Central de Venezuela (BCV)
+        </Typography>
       </Box>
 
-      {/* BOTONES SUPERIORES */}
-      <Box display="flex" gap={2} mb={2}>
+      <Box
+        display="flex"
+        gap={2}
+        my={4}
+        flexDirection="row"
+        justifyContent="center"
+        alignItems="center"
+        sx={{ whiteSpace: "nowrap", overflowX: "auto" }}
+      >
+        <Typography
+          variant="h6"
+          sx={{ fontSize: { xs: 14, sm: 18 }, fontWeight: "bold" }}
+        >
+          Total participantes:
+          <span style={{ fontWeight: "normal", marginLeft: 6 }}>
+            {totalParticipantes}
+          </span>
+        </Typography>
+        <Divider orientation="vertical" flexItem sx={{ mx: 2 }} />
+        <Typography
+          variant="h6"
+          color="success.main"
+          sx={{ fontSize: { xs: 14, sm: 18 }, fontWeight: "bold" }}
+        >
+          Pagados:
+          <span style={{ fontWeight: "normal", marginLeft: 6 }}>{pagados}</span>
+        </Typography>
+        <Divider orientation="vertical" flexItem sx={{ mx: 2 }} />
+        <Typography
+          variant="h6"
+          color="warning.main"
+          sx={{ fontSize: { xs: 14, sm: 18 }, fontWeight: "bold" }}
+        >
+          Pendientes:
+          <span style={{ fontWeight: "normal", marginLeft: 6 }}>
+            {pendientes}
+          </span>
+        </Typography>
+      </Box>
+
+      <Box
+        display="flex"
+        gap={2}
+        mb={2}
+        justifyContent="center"
+        alignItems="center"
+      >
         <Button variant="contained" onClick={() => navigate("/registrar")}>
           Registrar participante
         </Button>
@@ -251,12 +285,13 @@ export default function Dashboard() {
           </>
         )}
       </Box>
-      {/* MODAL DE REPORTE SOLO PARA ADMIN */}
+
+      {/* --- MODAL ACTUALIZADO con montos en Bs. --- */}
       {user?.email && adminEmail.includes(user.email) && (
         <Modal open={openReporte} onClose={() => setOpenReporte(false)}>
           <Paper
             sx={{
-              maxWidth: 400,
+              maxWidth: 450,
               mx: "auto",
               mt: 10,
               p: 4,
@@ -270,7 +305,7 @@ export default function Dashboard() {
               gutterBottom
               color="primary.main"
             >
-              Reporte financiero del Congreso
+              Reporte Financiero del Congreso
             </Typography>
             <Divider sx={{ mb: 2 }} />
             <Box mb={2}>
@@ -292,6 +327,15 @@ export default function Dashboard() {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}
+                <br />
+                <Typography variant="caption" color="text.secondary">
+                  (Bs.{" "}
+                  {montoRecaudadoBs.toLocaleString("de-DE", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                  )
+                </Typography>
               </Typography>
               <Typography variant="body1">
                 <b>Monto pendiente:</b> $
@@ -299,6 +343,15 @@ export default function Dashboard() {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}
+                <br />
+                <Typography variant="caption" color="text.secondary">
+                  (Bs.{" "}
+                  {montoPendienteBs.toLocaleString("de-DE", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                  )
+                </Typography>
               </Typography>
               <Typography variant="body1" color="primary">
                 <b>Total potencial:</b> $
@@ -306,6 +359,15 @@ export default function Dashboard() {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}
+                <br />
+                <Typography variant="caption" color="text.secondary">
+                  (Bs.{" "}
+                  {montoTotalBs.toLocaleString("de-DE", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                  )
+                </Typography>
               </Typography>
             </Box>
             <Divider sx={{ mb: 2 }} />
@@ -321,32 +383,29 @@ export default function Dashboard() {
         </Modal>
       )}
 
-      {/* FILTRO */}
-      <TextField
-        fullWidth
-        label="Buscar por nombre, apellido o cédula"
-        value={filtro}
-        onChange={(e) => setFiltro(e.target.value)}
-        margin="normal"
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon />
-            </InputAdornment>
-          ),
-        }}
-      />
-
-      {/* FILTROS DE ORDENAMIENTO */}
-      <Box display="flex" gap={2} mb={2} flexWrap="wrap">
+      <Box display="flex" gap={2} mb={2} flexWrap="nowrap" alignItems="center" width="100%">
+        <TextField
+          label="Buscar por nombre, apellido o cédula"
+          value={filtro}
+          onChange={(e) => setFiltro(e.target.value)}
+          margin="normal"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+          }}
+          sx={{ flex: 2, minWidth: 120 }}
+        />
         <TextField
           select
           label="Ordenar por"
           value={sortColumn}
-          onChange={e => setSortColumn(e.target.value)}
+          onChange={(e) => setSortColumn(e.target.value)}
           SelectProps={{ native: true }}
           size="small"
-          sx={{ minWidth: 120 }}
+          sx={{ flex: 1, minWidth: 100 }}
         >
           <option value="nombre">Nombre</option>
           <option value="apellido">Apellido</option>
@@ -361,16 +420,16 @@ export default function Dashboard() {
           select
           label="Dirección"
           value={sortDirection}
-          onChange={e => setSortDirection(e.target.value)}
+          onChange={(e) => setSortDirection(e.target.value)}
           SelectProps={{ native: true }}
           size="small"
-          sx={{ minWidth: 120 }}
+          sx={{ flex: 1, minWidth: 100 }}
         >
           <option value="asc">Ascendente</option>
           <option value="desc">Descendente</option>
         </TextField>
       </Box>
-      {/* TABLA */}
+
       <Box sx={{ width: "100%", overflowX: "auto" }}>
         <Table sx={{ minWidth: 650 }}>
           <TableHead>
@@ -381,7 +440,6 @@ export default function Dashboard() {
               <TableCell>Edad</TableCell>
               <TableCell>Pago</TableCell>
               <TableCell>Forma de pago</TableCell>
-              {/* <TableCell>Referencia/Zelle</TableCell> */}
               <TableCell>Registrado por</TableCell>
               <TableCell>Acciones</TableCell>
             </TableRow>

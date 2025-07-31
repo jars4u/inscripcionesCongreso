@@ -172,46 +172,50 @@ export default function EditParticipant() {
     <Container maxWidth="sm" sx={{ px: { xs: 1, sm: 2 } }}>
       <Box mt={{ xs: 2, sm: 5 }}>
         <Typography variant="h5" gutterBottom sx={{ fontSize: { xs: 20, sm: 28 } }}>Editar Participante</Typography>
-        <TextField
-          fullWidth
-          label="Nombre"
-          value={nombre}
-          onChange={(e) => setNombre(capitalizeWords(e.target.value))}
-          margin="normal"
-          error={!!errores.nombre}
-          helperText={errores.nombre}
-          sx={{ fontSize: { xs: 12, sm: 16 } }}
-        />
-        <TextField
-          fullWidth
-          label="Apellido"
-          value={apellido}
-          onChange={(e) => setApellido(capitalizeWords(e.target.value))}
-          margin="normal"
-          error={!!errores.apellido}
-          helperText={errores.apellido}
-          sx={{ fontSize: { xs: 12, sm: 16 } }}
-        />
-        <TextField
-          fullWidth
-          label="Cédula"
-          value={cedula}
-          onChange={handleCedula}
-          margin="normal"
-          error={!!errores.cedula}
-          helperText={errores.cedula}
-          sx={{ fontSize: { xs: 12, sm: 16 } }}
-        />
-        <TextField
-          fullWidth
-          label="Teléfono"
-          value={telefono}
-          onChange={(e) => setTelefono(e.target.value)}
-          margin="normal"
-          error={!!errores.telefono}
-          helperText={errores.telefono}
-          sx={{ fontSize: { xs: 12, sm: 16 } }}
-        />
+        <Box display="flex" gap={2} mb={2}>
+          <TextField
+            fullWidth
+            label="Nombre"
+            value={nombre}
+            onChange={(e) => setNombre(capitalizeWords(e.target.value))}
+            margin="normal"
+            error={!!errores.nombre}
+            helperText={errores.nombre}
+            sx={{ fontSize: { xs: 12, sm: 16 } }}
+          />
+          <TextField
+            fullWidth
+            label="Apellido"
+            value={apellido}
+            onChange={(e) => setApellido(capitalizeWords(e.target.value))}
+            margin="normal"
+            error={!!errores.apellido}
+            helperText={errores.apellido}
+            sx={{ fontSize: { xs: 12, sm: 16 } }}
+          />
+        </Box>
+        <Box display="flex" gap={2} mb={2}>
+          <TextField
+            fullWidth
+            label="Cédula"
+            value={cedula}
+            onChange={handleCedula}
+            margin="normal"
+            error={!!errores.cedula}
+            helperText={errores.cedula}
+            sx={{ fontSize: { xs: 12, sm: 16 } }}
+          />
+          <TextField
+            fullWidth
+            label="Teléfono"
+            value={telefono}
+            onChange={(e) => setTelefono(e.target.value)}
+            margin="normal"
+            error={!!errores.telefono}
+            helperText={errores.telefono}
+            sx={{ fontSize: { xs: 12, sm: 16 } }}
+          />
+        </Box>
         <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} gap={2}>
           <TextField
             type="date"
@@ -232,13 +236,13 @@ export default function EditParticipant() {
             control={
               <Checkbox checked={miembro} onChange={(e) => setMiembro(e.target.checked)} />
             }
-            label="¿Es miembro?"
+            label="Miembro"
           />
           <FormControlLabel
             control={
               <Checkbox checked={bautizado} onChange={(e) => setBautizado(e.target.checked)} />
             }
-            label="¿Bautizado?"
+            label="Bautizado"
           />
         </Box>
         <FormControlLabel
