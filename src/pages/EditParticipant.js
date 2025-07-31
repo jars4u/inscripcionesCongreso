@@ -25,6 +25,8 @@ import {
 import { db } from '../firebase';
 
 export default function EditParticipant() {
+  const [miembro, setMiembro] = useState(false);
+  const [bautizado, setBautizado] = useState(false);
   // Función para capitalizar cada palabra
   const capitalizeWords = (str) => str.replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
   const { id } = useParams();
@@ -108,6 +110,8 @@ export default function EditParticipant() {
           setTelefono(data.telefono || '');
           setFechaNacimiento(data.fechaNacimiento || '');
           setEdad(data.edad || (data.fechaNacimiento ? calcularEdad(data.fechaNacimiento) : ''));
+          setMiembro(!!data.miembro);
+          setBautizado(!!data.bautizado);
           setPago(data.pago || false);
           setFormaPago(data.formaPago || '');
           setReferencia(data.referencia || '');
@@ -143,6 +147,8 @@ export default function EditParticipant() {
         telefono,
         fechaNacimiento,
         edad,
+        miembro,
+        bautizado,
         pago,
         formaPago: pago ? formaPago : '',
         referencia: pago && formaPago === 'Pago movil' ? referencia : '',
@@ -219,6 +225,21 @@ export default function EditParticipant() {
           <Typography sx={{ width: { xs: '100%', sm: 120 }, ml: { xs: 0, sm: 1 }, fontSize: { xs: 12, sm: 16 }, textAlign: { xs: 'left', sm: 'center' } }} variant="body1">
             Edad: {edad ? edad : '-'}
           </Typography>
+        </Box>
+        {/* Opción de miembro y bautizado */}
+        <Box display="flex" gap={2} mb={1}>
+          <FormControlLabel
+            control={
+              <Checkbox checked={miembro} onChange={(e) => setMiembro(e.target.checked)} />
+            }
+            label="¿Es miembro?"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox checked={bautizado} onChange={(e) => setBautizado(e.target.checked)} />
+            }
+            label="¿Bautizado?"
+          />
         </Box>
         <FormControlLabel
           control={

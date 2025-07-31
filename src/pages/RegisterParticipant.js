@@ -18,6 +18,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function RegisterParticipant() {
+  const [bautizado, setBautizado] = useState(false);
+  const [miembro, setMiembro] = useState(false);
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   // Función para capitalizar cada palabra
@@ -82,6 +84,8 @@ export default function RegisterParticipant() {
         telefono,
         fechaNacimiento,
         edad,
+        miembro,
+        bautizado,
         pago,
         formaPago: pago ? formaPago : '',
         referencia: pago && formaPago === 'Pago movil' ? referencia : '',
@@ -155,6 +159,21 @@ export default function RegisterParticipant() {
           <Typography sx={{ width: 120, ml: 1 }} variant="body1">
             Edad: {edad ? edad : '-'}
           </Typography>
+        </Box>
+        {/* Opción de miembro y bautizado */}
+        <Box display="flex" gap={2} mb={1}>
+          <FormControlLabel
+            control={
+              <Checkbox checked={miembro} onChange={(e) => setMiembro(e.target.checked)} />
+            }
+            label="Miembro"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox checked={bautizado} onChange={(e) => setBautizado(e.target.checked)} />
+            }
+            label="Bautizado"
+          />
         </Box>
         <FormControlLabel
           control={
