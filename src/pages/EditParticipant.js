@@ -115,7 +115,12 @@ export default function EditParticipant() {
           setEdad(data.edad || (data.fechaNacimiento ? calcularEdad(data.fechaNacimiento) : ''));
           setMiembro(!!data.miembro);
           setBautizado(!!data.bautizado);
-          setMontoPagado(data.montoPagado !== undefined ? String(data.montoPagado) : '');
+          // Si es pagado antiguo, mostrar 8 en el input
+          if (data.pago && (!data.montoPagado || parseFloat(data.montoPagado) === 0)) {
+            setMontoPagado('8');
+          } else {
+            setMontoPagado(data.montoPagado !== undefined ? String(data.montoPagado) : '');
+          }
           setFechaPago(data.fechaPago || '');
           setTasaBCVPago(data.tasaBCVPago || '');
           setHistorialPagos(data.historialPagos || []);
