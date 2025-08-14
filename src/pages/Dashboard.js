@@ -121,17 +121,34 @@ export default function Dashboard() {
     });
 
   const totalParticipantes = data.length;
-  const pagados = data.filter((p) => p.pago).length;
-  const pendientes = totalParticipantes - pagados;
   const costoCongreso = 8;
-  const montoRecaudado = pagados * costoCongreso;
-  const montoPendiente = pendientes * costoCongreso;
   const montoTotal = totalParticipantes * costoCongreso;
+  // Suma de pagos y excedentes
+  // Considerar pagados antiguos (p.pago === true y montoPagado vacío o 0)
+  const pagadosAntiguos = data.filter((p) => p.pago && (!p.montoPagado || parseFloat(p.montoPagado) === 0));
+  const pagadosNuevos = data.filter((p) => parseFloat(p.montoPagado) === costoCongreso);
+  const pagadosExcedente = data.filter((p) => parseFloat(p.montoPagado) > costoCongreso);
+  const pagados = pagadosAntiguos.length + pagadosNuevos.length + pagadosExcedente.length;
+  const pendientes = data.length - pagados;
 
-  // --- Cálculos en Bolívares ---
-  const montoRecaudadoBs = montoRecaudado * (tasaBCV || 0);
+  // Monto recaudado: suma de todos los abonos (pagos completos y abonos parciales) + pagados antiguos (8$ por cada uno), pero sin excedentes
+  const montoRecaudadoSinExcedente = data.reduce((acc, p) => {
+    if (p.pago && (!p.montoPagado || parseFloat(p.montoPagado) === 0)) {
+      return acc + costoCongreso;
+    }
+    if (parseFloat(p.montoPagado) > costoCongreso) {
+      return acc + costoCongreso;
+    }
+    // Suma pagos completos y abonos parciales
+    return acc + (parseFloat(p.montoPagado) || 0);
+  }, 0);
+  const montoPagadoTotal = montoRecaudadoSinExcedente;
+  const excedenteTotal = data.reduce((acc, p) => acc + (parseFloat(p.excedente) || (parseFloat(p.montoPagado) > costoCongreso ? (parseFloat(p.montoPagado) - costoCongreso) : 0)), 0);
+  const montoPendiente = montoTotal - montoRecaudadoSinExcedente;
+  const montoPagadoTotalBs = montoPagadoTotal * (tasaBCV || 0);
   const montoPendienteBs = montoPendiente * (tasaBCV || 0);
   const montoTotalBs = montoTotal * (tasaBCV || 0);
+  const excedenteTotalBs = excedenteTotal * (tasaBCV || 0);
 
   return (
     <Container maxWidth="lg">
@@ -286,7 +303,7 @@ export default function Dashboard() {
         )}
       </Box>
 
-      {/* --- MODAL ACTUALIZADO con montos en Bs. --- */}
+      {/* --- MODAL ACTUALIZADO con montos en Bs. y excedente --- */}
       {user?.email && adminEmail.includes(user.email) && (
         <Modal open={openReporte} onClose={() => setOpenReporte(false)}>
           <Paper
@@ -322,19 +339,17 @@ export default function Dashboard() {
             <Divider sx={{ mb: 2 }} />
             <Box mb={2}>
               <Typography variant="body1">
-                <b>Monto recaudado:</b> $
-                {montoRecaudado.toLocaleString("de-DE", {
+                <b>Monto recaudado (total abonos):</b> $
+                {montoPagadoTotal.toLocaleString("de-DE", {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}
                 <br />
                 <Typography variant="caption" color="text.secondary">
-                  (Bs.{" "}
-                  {montoRecaudadoBs.toLocaleString("de-DE", {
+                  (Bs. {montoPagadoTotalBs.toLocaleString("de-DE", {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
-                  })}
-                  )
+                  })})
                 </Typography>
               </Typography>
               <Typography variant="body1">
@@ -345,12 +360,10 @@ export default function Dashboard() {
                 })}
                 <br />
                 <Typography variant="caption" color="text.secondary">
-                  (Bs.{" "}
-                  {montoPendienteBs.toLocaleString("de-DE", {
+                  (Bs. {montoPendienteBs.toLocaleString("de-DE", {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
-                  })}
-                  )
+                  })})
                 </Typography>
               </Typography>
               <Typography variant="body1" color="primary">
@@ -361,11 +374,32 @@ export default function Dashboard() {
                 })}
                 <br />
                 <Typography variant="caption" color="text.secondary">
-                  (Bs.{" "}
-                  {montoTotalBs.toLocaleString("de-DE", {
+                  (Bs. {montoTotalBs.toLocaleString("de-DE", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })})
+                </Typography>
+              </Typography>
+              <Typography variant="body1" color="info.main">
+                <b>Recaudado con excedente:</b> $
+                {(montoPagadoTotal + excedenteTotal).toLocaleString("de-DE", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+                <span style={{ color: '#1976d2', fontWeight: 'normal' }}> ( +{excedenteTotal.toLocaleString("de-DE", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })} )</span>
+                <br />
+                <Typography variant="caption" color="text.secondary">
+                  (Bs. {(montoPagadoTotalBs + excedenteTotalBs).toLocaleString("de-DE", {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
+                  <span style={{ color: '#1976d2', fontWeight: 'normal' }}> ( +{excedenteTotalBs.toLocaleString("de-DE", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })} )</span>
                   )
                 </Typography>
               </Typography>
@@ -383,17 +417,31 @@ export default function Dashboard() {
         </Modal>
       )}
 
-      <Box display="flex" gap={2} mb={2} flexWrap="nowrap" alignItems="center" width="100%">
+      <Box display="flex" gap={2} mb={2} pt={2} flexWrap="nowrap" alignItems="flex-start" width="100%">
         <TextField
           label="Buscar por nombre, apellido o cédula"
           value={filtro}
+          size="small"
           onChange={(e) => setFiltro(e.target.value)}
-          margin="normal"
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
                 <SearchIcon />
               </InputAdornment>
+            ),
+            endAdornment: (
+              filtro ? (
+                <InputAdornment position="end">
+                  <IconButton
+                    aria-label="Limpiar búsqueda"
+                    size="small"
+                    onClick={() => setFiltro("")}
+                    edge="end"
+                  >
+                    <span className="material-icons" style={{ fontSize: 20 }}>x</span>
+                  </IconButton>
+                </InputAdornment>
+              ) : null
             ),
           }}
           sx={{ flex: 2, minWidth: 120 }}
@@ -454,11 +502,29 @@ export default function Dashboard() {
                 <TableCell>{p.telefono}</TableCell>
                 <TableCell>{p.edad ? p.edad : "-"}</TableCell>
                 <TableCell>
-                  {p.pago ? (
-                    <Chip label="Pagado" color="success" />
-                  ) : (
-                    <Chip label="Pendiente" color="warning" />
-                  )}
+                  {(() => {
+                    const monto = parseFloat(p.montoPagado) || 0;
+                    // Si el registro tiene el campo pago en true y no tiene montoPagado, es un pagado antiguo
+                    if (p.pago && (!p.montoPagado || monto === 0)) {
+                      return <Chip label="Pagado" color="success" />;
+                    }
+                    if (monto === 0) {
+                      return (
+                        <Chip label={`Pendiente $${costoCongreso.toFixed(2)}`} color="warning" />
+                      );
+                    }
+                    if (monto < costoCongreso) {
+                      return (
+                        <Chip label={`Pendiente $${(costoCongreso - monto).toFixed(2)}`} color="warning" />
+                      );
+                    }
+                    if (monto === costoCongreso) {
+                      return <Chip label="Pagado" color="success" />;
+                    }
+                    if (monto > costoCongreso) {
+                      return <Chip label={`Pagado +$${(monto - costoCongreso).toFixed(2)}`} color="info" />;
+                    }
+                  })()}
                 </TableCell>
                 <TableCell>
                   {p.pago

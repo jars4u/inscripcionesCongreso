@@ -39,7 +39,10 @@ export default function EditParticipant() {
   const [telefono, setTelefono] = useState('');
   const [fechaNacimiento, setFechaNacimiento] = useState('');
   const [edad, setEdad] = useState('');
-  const [pago, setPago] = useState(false);
+  const [montoPagado, setMontoPagado] = useState('');
+  const [fechaPago, setFechaPago] = useState('');
+  const [tasaBCVPago, setTasaBCVPago] = useState('');
+  const [historialPagos, setHistorialPagos] = useState([]);
   const [formaPago, setFormaPago] = useState('');
   const [referencia, setReferencia] = useState('');
   const [zelleInfo, setZelleInfo] = useState('');
@@ -112,7 +115,10 @@ export default function EditParticipant() {
           setEdad(data.edad || (data.fechaNacimiento ? calcularEdad(data.fechaNacimiento) : ''));
           setMiembro(!!data.miembro);
           setBautizado(!!data.bautizado);
-          setPago(data.pago || false);
+          setMontoPagado(data.montoPagado !== undefined ? String(data.montoPagado) : '');
+          setFechaPago(data.fechaPago || '');
+          setTasaBCVPago(data.tasaBCVPago || '');
+          setHistorialPagos(data.historialPagos || []);
           setFormaPago(data.formaPago || '');
           setReferencia(data.referencia || '');
           setZelleInfo(data.zelleInfo || '');
@@ -139,8 +145,17 @@ export default function EditParticipant() {
       return;
     }
     try {
+      const monto = parseFloat(montoPagado) || 0;
+      let pago = false;
+      let excedente = 0;
+      if (monto >= 8) {
+        pago = true;
+        excedente = monto > 8 ? monto - 8 : 0;
+      }
       const docRef = doc(db, 'participantes', id);
-      await updateDoc(docRef, {
+      // Leer el participante actual para comparar montoPagado
+      const docSnap = await getDoc(docRef);
+      let updateData = {
         nombre,
         apellido,
         cedula,
@@ -150,14 +165,44 @@ export default function EditParticipant() {
         miembro,
         bautizado,
         pago,
-        formaPago: pago ? formaPago : '',
-        referencia: pago && formaPago === 'Pago movil' ? referencia : '',
-        zelleInfo: pago && formaPago === 'Zelle' ? zelleInfo : '',
+        montoPagado: monto,
+        excedente,
+        formaPago: monto > 0 ? formaPago : '',
+        referencia: monto > 0 && formaPago === 'Pago movil' ? referencia : '',
+        zelleInfo: monto > 0 && formaPago === 'Zelle' ? zelleInfo : '',
         segundaFormaPago: agregarSegundaForma ? segundaFormaPago : '',
         referencia2: agregarSegundaForma && segundaFormaPago === 'Pago movil' ? referencia2 : '',
         zelleInfo2: agregarSegundaForma && segundaFormaPago === 'Zelle' ? zelleInfo2 : '',
-      });
-      // alert("Participante actualizado correctamente");
+      };
+      let montoAnterior = 0;
+      let historialAnterior = [];
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        montoAnterior = parseFloat(data.montoPagado) || 0;
+        historialAnterior = Array.isArray(data.historialPagos) ? data.historialPagos : [];
+      }
+      // Si el montoPagado cambió y es mayor a 0, registrar fecha y tasa BCV en historial
+      if (monto > 0 && monto !== montoAnterior) {
+        let tasaBCVActual = 0;
+        try {
+          const resp = await fetch("https://pydolarve.org/api/v1/dollar?page=bcv&monitor=usd");
+          const json = await resp.json();
+          tasaBCVActual = json && json.price ? parseFloat(json.price) : 0;
+        } catch (e) {
+          tasaBCVActual = 0;
+        }
+        const nuevoPago = {
+          fecha: new Date().toISOString(),
+          monto,
+          tasaBCV: tasaBCVActual
+        };
+        updateData.fechaPago = nuevoPago.fecha;
+        updateData.tasaBCVPago = tasaBCVActual;
+        updateData.historialPagos = [...historialAnterior, nuevoPago];
+      } else {
+        updateData.historialPagos = historialAnterior;
+      }
+      await updateDoc(docRef, updateData);
       navigate('/dashboard');
     } catch (error) {
       // alert("Error al actualizar participante: " + error.message);
@@ -171,7 +216,22 @@ export default function EditParticipant() {
   return (
     <Container maxWidth="sm" sx={{ px: { xs: 1, sm: 2 } }}>
       <Box mt={{ xs: 2, sm: 5 }}>
-        <Typography variant="h5" gutterBottom sx={{ fontSize: { xs: 20, sm: 28 } }}>Editar Participante</Typography>
+        <Typography variant="h5" sx={{ fontSize: { xs: 20, sm: 28 } }}>Editar Participante</Typography>
+        {/* Historial de pagos/abonos con fecha y tasa BCV */}
+        {(!loading && historialPagos && historialPagos.length > 0) && (
+          <Box mb={2}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
+              Historial de pagos/abonos:
+            </Typography>
+            <Box>
+              {historialPagos.map((h, idx) => (
+                <Typography key={idx} variant="caption" color="text.secondary" sx={{ fontSize: 12, display: 'block' }}>
+                  {new Date(h.fecha).toLocaleString('es-VE', { dateStyle: 'medium', timeStyle: 'short' })} | Monto: ${h.monto.toFixed(2)} | Tasa BCV: Bs. {h.tasaBCV ? h.tasaBCV.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'No disponible'}
+                </Typography>
+              ))}
+            </Box>
+          </Box>
+        )}
         <Box display="flex" gap={2} mb={2}>
           <TextField
             fullWidth
@@ -245,93 +305,94 @@ export default function EditParticipant() {
             label="Bautizado"
           />
         </Box>
+        <Box display="flex" gap={2} mb={2} alignItems="center">
+          <TextField
+            fullWidth
+            type="number"
+            label="Monto pagado ($)"
+            value={montoPagado}
+            onChange={e => setMontoPagado(e.target.value.replace(/[^0-9.]/g, ''))}
+            margin="normal"
+            inputProps={{ min: 0, step: '0.01' }}
+            sx={{ fontSize: { xs: 12, sm: 16 } }}
+          />
+          <FormControl fullWidth margin="normal" sx={{ fontSize: { xs: 12, sm: 16 } }}>
+            <InputLabel id="forma-pago-label">Forma de pago</InputLabel>
+            <Select
+              labelId="forma-pago-label"
+              value={formaPago}
+              label="Forma de pago"
+              onChange={(e) => setFormaPago(e.target.value)}
+              sx={{ fontSize: { xs: 12, sm: 16 } }}
+            >
+              <MenuItem value="Pago movil">Pago móvil</MenuItem>
+              <MenuItem value="Efectivo">Efectivo</MenuItem>
+              <MenuItem value="Zelle">Zelle</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+        {formaPago === 'Pago movil' && (
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Número de referencia"
+            value={referencia}
+            onChange={(e) => setReferencia(e.target.value)}
+            sx={{ fontSize: { xs: 12, sm: 16 } }}
+          />
+        )}
+        {formaPago === 'Zelle' && (
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Número de confirmación o nombre del titular"
+            value={zelleInfo}
+            onChange={(e) => setZelleInfo(e.target.value)}
+            sx={{ fontSize: { xs: 12, sm: 16 } }}
+          />
+        )}
         <FormControlLabel
           control={
-            <Checkbox checked={pago} onChange={(e) => setPago(e.target.checked)} size="small" />
+            <Checkbox checked={agregarSegundaForma} onChange={(e) => setAgregarSegundaForma(e.target.checked)} size="small" />
           }
-          label="Pago cancelado"
-          sx={{ mt: 1, fontSize: { xs: 12, sm: 16 } }}
+          label="Segunda forma de pago"
+          sx={{ mt: 2, fontSize: { xs: 12, sm: 16 } }}
         />
-        {pago && (
+        {agregarSegundaForma && (
           <>
             <FormControl fullWidth margin="normal" sx={{ fontSize: { xs: 12, sm: 16 } }}>
-              <InputLabel id="forma-pago-label">Forma de pago</InputLabel>
+              <InputLabel id="segunda-forma-pago-label">Segunda forma de pago</InputLabel>
               <Select
-                labelId="forma-pago-label"
-                value={formaPago}
-                label="Forma de pago"
-                onChange={(e) => setFormaPago(e.target.value)}
+                labelId="segunda-forma-pago-label"
+                value={segundaFormaPago}
+                label="Segunda forma de pago"
+                onChange={(e) => setSegundaFormaPago(e.target.value)}
                 sx={{ fontSize: { xs: 12, sm: 16 } }}
               >
-                <MenuItem value="Pago movil">Pago móvil</MenuItem>
-                <MenuItem value="Efectivo">Efectivo</MenuItem>
-                <MenuItem value="Zelle">Zelle</MenuItem>
+                {['Pago movil', 'Efectivo', 'Zelle'].filter(op => op !== formaPago).map(op => (
+                  <MenuItem key={op} value={op}>{op === 'Pago movil' ? 'Pago móvil' : op}</MenuItem>
+                ))}
               </Select>
             </FormControl>
-            {formaPago === 'Pago movil' && (
+            {segundaFormaPago === 'Pago movil' && (
               <TextField
                 fullWidth
                 margin="normal"
-                label="Número de referencia"
-                value={referencia}
-                onChange={(e) => setReferencia(e.target.value)}
+                label="Número de referencia (2da forma)"
+                value={referencia2}
+                onChange={(e) => setReferencia2(e.target.value)}
                 sx={{ fontSize: { xs: 12, sm: 16 } }}
               />
             )}
-            {formaPago === 'Zelle' && (
+            {segundaFormaPago === 'Zelle' && (
               <TextField
                 fullWidth
                 margin="normal"
-                label="Número de confirmación o nombre del titular"
-                value={zelleInfo}
-                onChange={(e) => setZelleInfo(e.target.value)}
+                label="Número de confirmación o nombre del titular (2da forma)"
+                value={zelleInfo2}
+                onChange={(e) => setZelleInfo2(e.target.value)}
                 sx={{ fontSize: { xs: 12, sm: 16 } }}
               />
-            )}
-            <FormControlLabel
-              control={
-                <Checkbox checked={agregarSegundaForma} onChange={(e) => setAgregarSegundaForma(e.target.checked)} size="small" />
-              }
-              label="Segunda forma de pago"
-              sx={{ mt: 2, fontSize: { xs: 12, sm: 16 } }}
-            />
-            {agregarSegundaForma && (
-              <>
-                <FormControl fullWidth margin="normal" sx={{ fontSize: { xs: 12, sm: 16 } }}>
-                  <InputLabel id="segunda-forma-pago-label">Segunda forma de pago</InputLabel>
-                  <Select
-                    labelId="segunda-forma-pago-label"
-                    value={segundaFormaPago}
-                    label="Segunda forma de pago"
-                    onChange={(e) => setSegundaFormaPago(e.target.value)}
-                    sx={{ fontSize: { xs: 12, sm: 16 } }}
-                  >
-                    {['Pago movil', 'Efectivo', 'Zelle'].filter(op => op !== formaPago).map(op => (
-                      <MenuItem key={op} value={op}>{op === 'Pago movil' ? 'Pago móvil' : op}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                {segundaFormaPago === 'Pago movil' && (
-                  <TextField
-                    fullWidth
-                    margin="normal"
-                    label="Número de referencia (2da forma)"
-                    value={referencia2}
-                    onChange={(e) => setReferencia2(e.target.value)}
-                    sx={{ fontSize: { xs: 12, sm: 16 } }}
-                  />
-                )}
-                {segundaFormaPago === 'Zelle' && (
-                  <TextField
-                    fullWidth
-                    margin="normal"
-                    label="Número de confirmación o nombre del titular (2da forma)"
-                    value={zelleInfo2}
-                    onChange={(e) => setZelleInfo2(e.target.value)}
-                    sx={{ fontSize: { xs: 12, sm: 16 } }}
-                  />
-                )}
-              </>
             )}
           </>
         )}
