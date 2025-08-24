@@ -5,6 +5,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import RegisterUser from './pages/RegisterUser';
 import RegisterParticipant from './pages/RegisterParticipant';
 import EditParticipant from './pages/EditParticipant';
+import ProtectedRoute from './ProtectedRoute';
+import AccesoDenegado from './pages/AccesoDenegado';
 
 
 function App() {
@@ -12,10 +14,27 @@ function App() {
     <AuthProvider>
       <Routes>
         <Route path="/" element={<Login />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/registrar-usuario" element={<RegisterUser />} />
-        <Route path="/registrar" element={<RegisterParticipant />} />
-        <Route path="/editar/:id" element={<EditParticipant />} />
+        <Route path="/acceso-denegado" element={<AccesoDenegado />} />
+        <Route path="/dashboard" element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/registrar-usuario" element={
+          <ProtectedRoute>
+            <RegisterUser />
+          </ProtectedRoute>
+        } />
+        <Route path="/registrar" element={
+          <ProtectedRoute>
+            <RegisterParticipant />
+          </ProtectedRoute>
+        } />
+        <Route path="/editar/:id" element={
+          <ProtectedRoute>
+            <EditParticipant />
+          </ProtectedRoute>
+        } />
       </Routes>
     </AuthProvider>
   );

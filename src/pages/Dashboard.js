@@ -148,13 +148,10 @@ export default function Dashboard() {
   };
 
   const handleLogout = () => {
-    signOut(auth)
-      .then(() => {
-        navigate("/");
-      })
-      .catch((error) => {
-        console.error("Error al cerrar sesión:", error);
-      });
+    navigate("/");
+    signOut(auth).catch((error) => {
+      console.error("Error al cerrar sesión:", error);
+    });
   };
 
   // Filtrar y ordenar datos
