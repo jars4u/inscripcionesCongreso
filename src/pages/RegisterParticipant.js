@@ -49,6 +49,7 @@ export default function RegisterParticipant() {
   const [zelleInfo2, setZelleInfo2] = useState("");
   const [errorCedula, setErrorCedula] = useState("");
   const [errorCampos, setErrorCampos] = useState("");
+  const [exento, setExento] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -109,19 +110,36 @@ export default function RegisterParticipant() {
         miembro,
         bautizado,
         pago,
-        montoPagado: monto,
-        excedente,
-        formaPago: monto > 0 ? formaPago : "",
-        referencia: monto > 0 && formaPago === "Pago movil" ? referencia : "",
-        zelleInfo: monto > 0 && formaPago === "Zelle" ? zelleInfo : "",
-        segundaFormaPago: agregarSegundaForma ? segundaFormaPago : "",
-        referencia2:
-          agregarSegundaForma && segundaFormaPago === "Pago movil"
-            ? referencia2
-            : "",
-        zelleInfo2:
-          agregarSegundaForma && segundaFormaPago === "Zelle" ? zelleInfo2 : "",
+        montoPagado: exento ? 0 : monto,
+        excedente: exento ? 0 : excedente,
+        formaPago: exento ? "Exento" : monto > 0 ? formaPago : "",
+        referencia: exento
+          ? ""
+          : monto > 0 && formaPago === "Pago movil"
+          ? referencia
+          : "",
+        zelleInfo: exento
+          ? ""
+          : monto > 0 && formaPago === "Zelle"
+          ? zelleInfo
+          : "",
+        segundaFormaPago: exento
+          ? ""
+          : agregarSegundaForma
+          ? segundaFormaPago
+          : "",
+        referencia2: exento
+          ? ""
+          : agregarSegundaForma && segundaFormaPago === "Pago movil"
+          ? referencia2
+          : "",
+        zelleInfo2: exento
+          ? ""
+          : agregarSegundaForma && segundaFormaPago === "Zelle"
+          ? zelleInfo2
+          : "",
         registradoPor: user.email,
+        exento,
         timestamp: serverTimestamp(),
       });
       navigate("/dashboard");
@@ -133,9 +151,7 @@ export default function RegisterParticipant() {
   return (
     <Container maxWidth="sm">
       <Box mt={5}>
-        <Typography variant="h4">
-          Registrar Participante
-        </Typography>
+        <Typography variant="h4">Registrar Participante</Typography>
         {/* Resumen de registro de pago con fecha y tasa BCV */}
         <Box mb={2}>
           <Typography
@@ -233,99 +249,113 @@ export default function RegisterParticipant() {
             }
             label="Bautizado"
           />
-        </Box>
-        <Box display="flex" gap={2} mb={2} alignItems="center">
-          <TextField
-            fullWidth
-            type="number"
-            label="Monto pagado ($)"
-            value={montoPagado}
-            onChange={(e) =>
-              setMontoPagado(e.target.value.replace(/[^0-9.]/g, ""))
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={exento}
+                onChange={(e) => setExento(e.target.checked)}
+                color="primary"
+              />
             }
-            margin="normal"
-            inputProps={{ min: 0, step: "0.01" }}
+            label="Exento de pago"
           />
-          <FormControl fullWidth margin="normal">
-            <InputLabel id="forma-pago-label">Forma de pago</InputLabel>
-            <Select
-              labelId="forma-pago-label"
-              value={formaPago}
-              label="Forma de pago"
-              onChange={(e) => setFormaPago(e.target.value)}
-            >
-              <MenuItem value="Pago movil">Pago móvil</MenuItem>
-              <MenuItem value="Efectivo">Efectivo</MenuItem>
-              <MenuItem value="Zelle">Zelle</MenuItem>
-            </Select>
-          </FormControl>
         </Box>
-        {formaPago === "Pago movil" && (
-          <TextField
-            fullWidth
-            margin="normal"
-            label="Número de referencia"
-            value={referencia}
-            onChange={(e) => setReferencia(e.target.value)}
-          />
-        )}
-        {formaPago === "Zelle" && (
-          <TextField
-            fullWidth
-            margin="normal"
-            label="Número de confirmación o nombre del titular"
-            value={zelleInfo}
-            onChange={(e) => setZelleInfo(e.target.value)}
-          />
-        )}
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={agregarSegundaForma}
-              onChange={(e) => setAgregarSegundaForma(e.target.checked)}
-            />
-          }
-          label="Agregar segunda forma de pago"
-          sx={{ mt: 2 }}
-        />
-        {agregarSegundaForma && (
+        {!exento && (
           <>
-            <FormControl fullWidth margin="normal">
-              <InputLabel id="segunda-forma-pago-label">
-                Segunda forma de pago
-              </InputLabel>
-              <Select
-                labelId="segunda-forma-pago-label"
-                value={segundaFormaPago}
-                label="Segunda forma de pago"
-                onChange={(e) => setSegundaFormaPago(e.target.value)}
-              >
-                {["Pago movil", "Efectivo", "Zelle"]
-                  .filter((op) => op !== formaPago)
-                  .map((op) => (
-                    <MenuItem key={op} value={op}>
-                      {op === "Pago movil" ? "Pago móvil" : op}
-                    </MenuItem>
-                  ))}
-              </Select>
-            </FormControl>
-            {segundaFormaPago === "Pago movil" && (
+            <Box display="flex" gap={2} mb={2} alignItems="center">
+              <TextField
+                fullWidth
+                type="number"
+                label="Monto pagado ($)"
+                value={montoPagado}
+                onChange={(e) =>
+                  setMontoPagado(e.target.value.replace(/[^0-9.]/g, ""))
+                }
+                margin="normal"
+                inputProps={{ min: 0, step: "0.01" }}
+              />
+              <FormControl fullWidth margin="normal">
+                <InputLabel id="forma-pago-label">Forma de pago</InputLabel>
+                <Select
+                  labelId="forma-pago-label"
+                  value={formaPago}
+                  label="Forma de pago"
+                  onChange={(e) => setFormaPago(e.target.value)}
+                >
+                  <MenuItem value="Pago movil">Pago móvil</MenuItem>
+                  <MenuItem value="Efectivo">Efectivo</MenuItem>
+                  <MenuItem value="Zelle">Zelle</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+            {formaPago === "Pago movil" && (
               <TextField
                 fullWidth
                 margin="normal"
-                label="Número de referencia (2da forma)"
-                value={referencia2}
-                onChange={(e) => setReferencia2(e.target.value)}
+                label="Número de referencia"
+                value={referencia}
+                onChange={(e) => setReferencia(e.target.value)}
               />
             )}
-            {segundaFormaPago === "Zelle" && (
+            {formaPago === "Zelle" && (
               <TextField
                 fullWidth
                 margin="normal"
-                label="Número de confirmación o nombre del titular (2da forma)"
-                value={zelleInfo2}
-                onChange={(e) => setZelleInfo2(e.target.value)}
+                label="Número de confirmación o nombre del titular"
+                value={zelleInfo}
+                onChange={(e) => setZelleInfo(e.target.value)}
               />
+            )}
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={agregarSegundaForma}
+                  onChange={(e) => setAgregarSegundaForma(e.target.checked)}
+                />
+              }
+              label="Agregar segunda forma de pago"
+              sx={{ mt: 2 }}
+            />
+            {agregarSegundaForma && (
+              <>
+                <FormControl fullWidth margin="normal">
+                  <InputLabel id="segunda-forma-pago-label">
+                    Segunda forma de pago
+                  </InputLabel>
+                  <Select
+                    labelId="segunda-forma-pago-label"
+                    value={segundaFormaPago}
+                    label="Segunda forma de pago"
+                    onChange={(e) => setSegundaFormaPago(e.target.value)}
+                  >
+                    {["Pago movil", "Efectivo", "Zelle"]
+                      .filter((op) => op !== formaPago)
+                      .map((op) => (
+                        <MenuItem key={op} value={op}>
+                          {op === "Pago movil" ? "Pago móvil" : op}
+                        </MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+                {segundaFormaPago === "Pago movil" && (
+                  <TextField
+                    fullWidth
+                    margin="normal"
+                    label="Número de referencia (2da forma)"
+                    value={referencia2}
+                    onChange={(e) => setReferencia2(e.target.value)}
+                  />
+                )}
+                {segundaFormaPago === "Zelle" && (
+                  <TextField
+                    fullWidth
+                    margin="normal"
+                    label="Número de confirmación o nombre del titular (2da forma)"
+                    value={zelleInfo2}
+                    onChange={(e) => setZelleInfo2(e.target.value)}
+                  />
+                )}
+              </>
             )}
           </>
         )}
