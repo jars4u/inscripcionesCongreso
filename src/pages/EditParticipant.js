@@ -46,6 +46,7 @@ export default function EditParticipant() {
   const [fechaNacimiento, setFechaNacimiento] = useState("");
   const [edad, setEdad] = useState("");
   const [montoPagado, setMontoPagado] = useState("");
+  const [montoPagado2, setMontoPagado2] = useState("");
   const [fechaPago, setFechaPago] = useState("");
   const [tasaBCVPago, setTasaBCVPago] = useState("");
   const [historialPagos, setHistorialPagos] = useState([]);
@@ -169,56 +170,59 @@ export default function EditParticipant() {
       return;
     }
     try {
-      const monto = parseFloat(montoPagado) || 0;
+          const monto1 = parseFloat(montoPagado) || 0;
+          const monto2 = agregarSegundaForma ? parseFloat(montoPagado2) || 0 : 0;
+          const montoTotal = monto1 + monto2;
       let pago = false;
       let excedente = 0;
-      if (monto >= 8) {
+          if (montoTotal >= 8) {
         pago = true;
-        excedente = monto > 8 ? monto - 8 : 0;
+            excedente = montoTotal > 8 ? montoTotal - 8 : 0;
       }
       const docRef = doc(db, "participantes", id);
       // Leer el participante actual para comparar montoPagado
       const docSnap = await getDoc(docRef);
-      let updateData = {
-        nombre,
-        apellido,
-        cedula,
-        telefono,
-        fechaNacimiento,
-        edad,
-        miembro,
-        bautizado,
-        pago,
-        montoPagado: exento ? 0 : monto,
-        excedente: exento ? 0 : excedente,
-        formaPago: exento ? "Exento" : monto > 0 ? formaPago : "",
-        referencia: exento
-          ? ""
-          : monto > 0 && formaPago === "Pago movil"
-          ? referencia
-          : "",
-        zelleInfo: exento
-          ? ""
-          : monto > 0 && formaPago === "Zelle"
-          ? zelleInfo
-          : "",
-        segundaFormaPago: exento
-          ? ""
-          : agregarSegundaForma
-          ? segundaFormaPago
-          : "",
-        referencia2: exento
-          ? ""
-          : agregarSegundaForma && segundaFormaPago === "Pago movil"
-          ? referencia2
-          : "",
-        zelleInfo2: exento
-          ? ""
-          : agregarSegundaForma && segundaFormaPago === "Zelle"
-          ? zelleInfo2
-          : "",
-        exento,
-      };
+          let updateData = {
+            nombre,
+            apellido,
+            cedula,
+            telefono,
+            fechaNacimiento,
+            edad,
+            miembro,
+            bautizado,
+            pago,
+            montoPagado: exento ? 0 : montoTotal,
+            excedente: exento ? 0 : excedente,
+            formaPago: exento ? "Exento" : monto1 > 0 ? formaPago : "",
+            referencia: exento
+              ? ""
+              : monto1 > 0 && formaPago === "Pago movil"
+              ? referencia
+              : "",
+            zelleInfo: exento
+              ? ""
+              : monto1 > 0 && formaPago === "Zelle"
+              ? zelleInfo
+              : "",
+            segundaFormaPago: exento
+              ? ""
+              : agregarSegundaForma
+              ? segundaFormaPago
+              : "",
+            montoPagado2: exento ? 0 : monto2,
+            referencia2: exento
+              ? ""
+              : agregarSegundaForma && monto2 > 0 && segundaFormaPago === "Pago movil"
+              ? referencia2
+              : "",
+            zelleInfo2: exento
+              ? ""
+              : agregarSegundaForma && monto2 > 0 && segundaFormaPago === "Zelle"
+              ? zelleInfo2
+              : "",
+            exento,
+          };
       let montoAnterior = 0;
       let historialAnterior = [];
       if (docSnap.exists()) {
@@ -229,7 +233,7 @@ export default function EditParticipant() {
           : [];
       }
       // Si el montoPagado cambió y es mayor a 0, registrar fecha y tasa BCV en historial
-      if (monto > 0 && monto !== montoAnterior) {
+           if (montoTotal > 0 && montoTotal !== montoAnterior) {
         let tasaBCVActual = 0;
         try {
           const resp = await fetch(
@@ -240,11 +244,11 @@ export default function EditParticipant() {
         } catch (e) {
           tasaBCVActual = 0;
         }
-        const nuevoPago = {
-          fecha: new Date().toISOString(),
-          monto,
-          tasaBCV: tasaBCVActual,
-        };
+             const nuevoPago = {
+               fecha: new Date().toISOString(),
+               monto: montoTotal,
+               tasaBCV: tasaBCVActual,
+             };
         updateData.fechaPago = nuevoPago.fecha;
         updateData.tasaBCVPago = tasaBCVActual;
         updateData.historialPagos = [...historialAnterior, nuevoPago];
@@ -406,7 +410,7 @@ export default function EditParticipant() {
                   color="primary"
                 />
               }
-              label="Exento de pago"
+              label="Exento"
             />
           )}
         </Box>
@@ -476,15 +480,21 @@ export default function EditParticipant() {
               sx={{ mt: 2, fontSize: { xs: 12, sm: 16 } }}
             />
             {agregarSegundaForma && (
-              <>
-                <FormControl
+              <Box display="flex" gap={2} mb={2} alignItems="center">
+                <TextField
                   fullWidth
+                  type="number"
+                  label="Monto pagado 2do abono ($)"
+                  value={montoPagado2}
+                  onChange={(e) =>
+                    setMontoPagado2(e.target.value.replace(/[^0-9.]/g, ""))
+                  }
                   margin="normal"
+                  inputProps={{ min: 0, step: "0.01" }}
                   sx={{ fontSize: { xs: 12, sm: 16 } }}
-                >
-                  <InputLabel id="segunda-forma-pago-label">
-                    Segunda forma de pago
-                  </InputLabel>
+                />
+                <FormControl fullWidth margin="normal" sx={{ fontSize: { xs: 12, sm: 16 } }}>
+                  <InputLabel id="segunda-forma-pago-label">Segunda forma de pago</InputLabel>
                   <Select
                     labelId="segunda-forma-pago-label"
                     value={segundaFormaPago}
@@ -501,27 +511,27 @@ export default function EditParticipant() {
                       ))}
                   </Select>
                 </FormControl>
-                {segundaFormaPago === "Pago movil" && (
-                  <TextField
-                    fullWidth
-                    margin="normal"
-                    label="Número de referencia (2da forma)"
-                    value={referencia2}
-                    onChange={(e) => setReferencia2(e.target.value)}
-                    sx={{ fontSize: { xs: 12, sm: 16 } }}
-                  />
-                )}
-                {segundaFormaPago === "Zelle" && (
-                  <TextField
-                    fullWidth
-                    margin="normal"
-                    label="Número de confirmación o nombre del titular (2da forma)"
-                    value={zelleInfo2}
-                    onChange={(e) => setZelleInfo2(e.target.value)}
-                    sx={{ fontSize: { xs: 12, sm: 16 } }}
-                  />
-                )}
-              </>
+              </Box>
+            )}
+            {agregarSegundaForma && segundaFormaPago === "Pago movil" && (
+              <TextField
+                fullWidth
+                margin="normal"
+                label="Número de referencia (2da forma)"
+                value={referencia2}
+                onChange={(e) => setReferencia2(e.target.value)}
+                sx={{ fontSize: { xs: 12, sm: 16 } }}
+              />
+            )}
+            {agregarSegundaForma && segundaFormaPago === "Zelle" && (
+              <TextField
+                fullWidth
+                margin="normal"
+                label="Número de confirmación o nombre del titular (2da forma)"
+                value={zelleInfo2}
+                onChange={(e) => setZelleInfo2(e.target.value)}
+                sx={{ fontSize: { xs: 12, sm: 16 } }}
+              />
             )}
           </>
         )}
