@@ -1,41 +1,153 @@
 import React, { useState, useEffect } from "react";
 import {
-  Container,
-  Box,
-  Typography,
-  Button,
   Alert,
-  TextField,
+  Box,
+  Button,
+  Chip,
+  Container,
+  Divider,
+  IconButton,
+  InputAdornment,
+  Paper,
   Table,
+  TableBody,
+  TableCell,
   TableHead,
   TableRow,
-  TableCell,
-  TableBody,
-  IconButton,
-  Chip,
-  InputAdornment,
-  Modal,
-  Paper,
-  Divider,
+  TextField,
+  Typography,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import LogoutIcon from "@mui/icons-material/Logout";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import AddIcon from "@mui/icons-material/Add";
+import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
+import PersonAddAltOutlinedIcon from "@mui/icons-material/PersonAddAltOutlined";
+import ArrowOutwardIcon from "@mui/icons-material/ArrowOutward";
+import SwapVertIcon from "@mui/icons-material/SwapVert";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import { getAuth, signOut } from "firebase/auth";
 import { getDocs, collection, deleteDoc, doc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
+import { getAppConfig, getEventCost, getParticipantPaymentStatus } from "../utils/paymentConfig";
+
+const surfaceSx = {
+  backgroundColor: "#FFFFFF",
+  border: "1px solid #D8D1C2",
+  borderRadius: 0,
+  boxShadow: "none",
+};
+
+const metricTileBaseSx = {
+  p: { xs: 1.5, md: 2.5 },
+  minHeight: { xs: 112, sm: 150 },
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "space-between",
+  cursor: "pointer",
+  transition: "transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease",
+  "&:hover": {
+    transform: "translateY(-2px)",
+  },
+};
+
+const compactIconButtonSx = {
+  border: "1px solid #D8D1C2",
+  width: 36,
+  height: 36,
+};
+
+const statusStyles = {
+  pagado: {
+    backgroundColor: "#E2F0E8",
+    color: "#0E4A35",
+    borderColor: "#BFD4C6",
+  },
+  legacy: {
+    backgroundColor: "#E7ECEA",
+    color: "#35584E",
+    borderColor: "#C7D1CD",
+  },
+  pendiente: {
+    backgroundColor: "#FFF0C2",
+    color: "#7A5400",
+    borderColor: "#E5CA70",
+  },
+  exento: {
+    backgroundColor: "#EEE8D8",
+    color: "#35584E",
+    borderColor: "#D4CCB7",
+  },
+};
+
+function getParticipantStatus(participant, costoCongreso) {
+  const paymentStatus = getParticipantPaymentStatus(participant, costoCongreso);
+  const monto = parseFloat(participant.montoPagado) || 0;
+
+  if (participant.exento) {
+    return {
+      key: "exento",
+      label: "Exento",
+      shortLabel: "Exento",
+      sx: statusStyles.exento,
+    };
+  }
+
+  if (paymentStatus.isLegacyPaid) {
+    return {
+      key: "pagado",
+      label: "Pagado legacy",
+      shortLabel: "Legacy",
+      sx: statusStyles.legacy,
+      helper: "Sin monto trazable",
+    };
+  }
+
+  if (monto === 0) {
+    return {
+      key: "pendiente",
+      label: `Pendiente $${costoCongreso.toFixed(2)}`,
+      shortLabel: "Pendiente",
+      sx: statusStyles.pendiente,
+    };
+  }
+
+  if (monto < costoCongreso) {
+    return {
+      key: "pendiente",
+      label: `Pendiente $${(costoCongreso - monto).toFixed(2)}`,
+      shortLabel: "Pendiente",
+      sx: statusStyles.pendiente,
+    };
+  }
+
+  if (monto > costoCongreso) {
+    return {
+      key: "pagado",
+      label: `Pagado +$${(monto - costoCongreso).toFixed(2)}`,
+      shortLabel: "Pagado +",
+      sx: statusStyles.pagado,
+    };
+  }
+
+  return {
+    key: "pagado",
+    label: "Pagado",
+    shortLabel: "Pagado",
+    sx: statusStyles.pagado,
+  };
+}
 
 export default function Dashboard() {
-  const [openPendientes, setOpenPendientes] = useState(false);
-  // ...existing code...
-  const [openExentos, setOpenExentos] = useState(false);
   const [data, setData] = useState([]);
   const [dataError, setDataError] = useState("");
+  const [config, setConfig] = useState(null);
   const [filtro, setFiltro] = useState("");
+  const [statusFilter, setStatusFilter] = useState("todos");
   const [sortColumn, setSortColumn] = useState("nombre");
   const [sortDirection, setSortDirection] = useState("asc");
 
@@ -67,6 +179,29 @@ export default function Dashboard() {
     cargarDatos();
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const cargarConfiguracion = async () => {
+      try {
+        const nextConfig = await getAppConfig();
+        if (!cancelled) {
+          setConfig(nextConfig);
+        }
+      } catch (_) {
+        if (!cancelled) {
+          setConfig(null);
+        }
+      }
+    };
+
+    cargarConfiguracion();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const eliminarParticipante = async (id) => {
     // Se ha eliminado window.confirm para compatibilidad
     if (window.confirm("¿Estás seguro de eliminar este participante?")) {
@@ -91,13 +226,43 @@ export default function Dashboard() {
     });
   };
 
+  const toggleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection((currentDirection) =>
+        currentDirection === "asc" ? "desc" : "asc"
+      );
+      return;
+    }
+
+    setSortColumn(column);
+    setSortDirection("asc");
+  };
+
+  const toggleStatusFilter = (value) => {
+    setStatusFilter((currentValue) =>
+      currentValue === value || value === "todos" ? "todos" : value
+    );
+  };
+
+  const costoCongreso = getEventCost(config);
+
   // Filtrar y ordenar datos
   const datosFiltrados = data
-    .filter((p) =>
-      (p.nombre + " " + p.apellido + " " + p.cedula)
+    .filter((participant) => {
+      const fullText = `${participant.nombre || ""} ${participant.apellido || ""} ${participant.cedula || ""}`
         .toLowerCase()
-        .includes(filtro.toLowerCase())
-    )
+        .includes(filtro.toLowerCase());
+
+      if (!fullText) {
+        return false;
+      }
+
+      if (statusFilter === "todos") {
+        return true;
+      }
+
+      return getParticipantStatus(participant, costoCongreso).key === statusFilter;
+    })
     .sort((a, b) => {
       let valA = a[sortColumn];
       let valB = b[sortColumn];
@@ -116,490 +281,664 @@ export default function Dashboard() {
       if (valA > valB) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
-  // ...existing code...
 
   const totalParticipantes = data.length;
-  const costoCongreso = 8;
   const pendientesList = data.filter(
-    (p) => !p.exento && (!p.pago || parseFloat(p.montoPagado) < costoCongreso)
+    (participant) => getParticipantPaymentStatus(participant, costoCongreso).key === "pendiente"
   );
-  const exentos = data.filter((p) => p.exento);
-  const pagadosAntiguos = data.filter(
-    (p) =>
-      p.pago && (!p.montoPagado || parseFloat(p.montoPagado) === 0) && !p.exento
-  );
-  const pagadosNuevos = data.filter(
-    (p) => parseFloat(p.montoPagado) === costoCongreso && !p.exento
-  );
-  const pagadosExcedente = data.filter(
-    (p) => parseFloat(p.montoPagado) > costoCongreso && !p.exento
-  );
-  const pagados =
-    pagadosAntiguos.length + pagadosNuevos.length + pagadosExcedente.length;
-  const pendientes = data.filter(
-    (p) => !p.exento && (!p.pago || parseFloat(p.montoPagado) < costoCongreso)
+  const legacyPaidCount = data.filter(
+    (participant) => getParticipantPaymentStatus(participant, costoCongreso).isLegacyPaid
   ).length;
+  const exentos = data.filter((p) => p.exento);
+  const pagados = data.filter(
+    (participant) => getParticipantPaymentStatus(participant, costoCongreso).key === "pagado"
+  ).length;
+  const pendientes = pendientesList.length;
+
+  const summaryCards = [
+    {
+      key: "todos",
+      title: "Total registrados",
+      value: totalParticipantes,
+      caption: "Base completa",
+      backgroundColor: "#00492F",
+      color: "#F7F3E8",
+      borderColor: "#00492F",
+    },
+    {
+      key: "pagado",
+      title: "Pagados",
+      value: pagados,
+      caption: legacyPaidCount > 0 ? `Incluye ${legacyPaidCount} legacy` : "Pago completo o mayor",
+      backgroundColor: "#046552",
+      color: "#F7F3E8",
+      borderColor: "#046552",
+    },
+    {
+      key: "pendiente",
+      title: "Pendientes",
+      value: pendientes,
+      caption: "Requieren seguimiento",
+      backgroundColor: "#FFBC00",
+      color: "#1E1E1E",
+      borderColor: "#D7A100",
+    },
+    {
+      key: "exento",
+      title: "Exentos",
+      value: exentos.length,
+      caption: "Sin cobro requerido",
+      backgroundColor: "#EEE8D8",
+      color: "#16302A",
+      borderColor: "#D4CCB7",
+    },
+  ];
+
+  const sortOptions = [
+    ["nombre", "Nombre"],
+    ["apellido", "Apellido"],
+    ["cedula", "Cédula"],
+    ["telefono", "Teléfono"],
+    ["edad", "Edad"],
+    ["formaPago", "Forma de pago"],
+    ["registradoPor", "Registrado por"],
+  ];
+
+  const activeSortLabel =
+    sortOptions.find(([value]) => value === sortColumn)?.[1] || "Nombre";
+
+  const renderParticipantActions = (participant) => (
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "flex-end",
+        gap: 0.5,
+      }}
+    >
+      <IconButton
+        aria-label={`Editar participante ${participant.nombre}`}
+        onClick={() => navigate(`/editar/${participant.id}`)}
+        sx={compactIconButtonSx}
+      >
+        <EditIcon fontSize="small" />
+      </IconButton>
+      <IconButton
+        aria-label={`Eliminar participante ${participant.nombre}`}
+        color="error"
+        onClick={() => eliminarParticipante(participant.id)}
+        sx={{ ...compactIconButtonSx, borderColor: "currentColor" }}
+      >
+        <DeleteIcon fontSize="small" />
+      </IconButton>
+    </Box>
+  );
 
   return (
-    <Container maxWidth="lg">
+    <Container maxWidth="xl" sx={{ py: { xs: 1.5, md: 4 } }}>
       <Box
-        mt={5}
-        mb={2}
         display="flex"
-        flexDirection={{ xs: "column", sm: "row" }}
+        flexDirection={{ xs: "column", lg: "row" }}
         justifyContent="space-between"
-        alignItems={{ xs: "stretch", sm: "center" }}
-        gap={2}
+        alignItems={{ xs: "stretch", lg: "flex-start" }}
+        gap={{ xs: 2, md: 3 }}
+        mb={{ xs: 2, md: 3 }}
       >
-        <Typography
-          variant="h4"
-          order={{ xs: 2, sm: 1 }}
+        <Box
           sx={{
-            whiteSpace: "nowrap",
-            fontSize: { xs: 28, sm: 32, md: 36 },
-            textAlign: { xs: "center", sm: "inherit" },
-            fontWeight: "bold",
+            ...surfaceSx,
+            flex: 1,
+            p: { xs: 1.5, md: 3 },
+            display: "flex",
+            flexDirection: "column",
+            gap: { xs: 2, md: 3 },
           }}
         >
-          Participantes Registrados
-        </Typography>
-        <Box
-          display="flex"
-          alignItems="center"
-          gap={2}
-          order={{ xs: 1, sm: 2 }}
-          justifyContent={{ xs: "flex-end", sm: "flex-end" }}
-          width="100%"
-        >
-          {user?.email && (
-            <Box display="flex" alignItems="center" gap={1}>
-              <AccountCircleIcon fontSize="small" color="action" />
-              <Typography variant="body2" color="text.secondary">
-                {user.email}
+          <Box
+            display="flex"
+            flexDirection={{ xs: "column", md: "row" }}
+            justifyContent="space-between"
+            gap={3}
+          >
+            <Box sx={{ maxWidth: 720 }}>
+              <Typography
+                variant="overline"
+                sx={{ color: "primary.main", letterSpacing: "0.12em" }}
+              >
+                Panel operativo
+              </Typography>
+              <Typography
+                variant="h3"
+                sx={{
+                  fontSize: { xs: 30, md: 42 },
+                  lineHeight: 1,
+                  mt: 0.5,
+                }}
+              >
+                Participantes registrados
               </Typography>
             </Box>
-          )}
-          <Button
-            variant="outlined"
-            startIcon={<LogoutIcon />}
-            onClick={handleLogout}
+            <Box
+              sx={{
+                minWidth: { xs: "100%", md: 280 },
+                display: "flex",
+                flexDirection: "column",
+                alignItems: { xs: "stretch", md: "flex-end" },
+                gap: 1.5,
+              }}
+            >
+              {user?.email && (
+                <Box display="flex" alignItems="center" gap={1}>
+                  {isAdmin && (
+                    <IconButton
+                      aria-label="Abrir configuración"
+                      onClick={() => navigate("/configuracion")}
+                      sx={compactIconButtonSx}
+                    >
+                      <SettingsOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                  <AccountCircleIcon fontSize="small" color="action" />
+                  <Typography variant="body2" color="text.secondary">
+                    {user.email}
+                  </Typography>
+                </Box>
+              )}
+              <Button
+                variant="outlined"
+                color="inherit"
+                startIcon={<LogoutIcon />}
+                onClick={handleLogout}
+                sx={{
+                  alignSelf: { xs: "stretch", md: "flex-end" },
+                  borderColor: "divider",
+                  color: "text.primary",
+                }}
+              >
+                Cerrar sesión
+              </Button>
+            </Box>
+          </Box>
+
+          <Divider />
+
+          <Box
+            display="flex"
+            flexDirection={{ xs: "column", xl: "row" }}
+            justifyContent="space-between"
+            gap={2}
           >
-            Cerrar sesión
-          </Button>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "repeat(2, minmax(0, 1fr))",
+                  sm: "repeat(2, minmax(0, 1fr))",
+                  xl: "repeat(4, minmax(0, 1fr))",
+                },
+                gap: 1.5,
+                flex: 1,
+                order: { xs: 2, xl: 1 },
+              }}
+            >
+              {summaryCards.map((card) => {
+                const isActive =
+                  (statusFilter === "todos" && card.key === "todos") ||
+                  statusFilter === card.key;
+
+                return (
+                  <Paper
+                    key={card.key}
+                    onClick={() => toggleStatusFilter(card.key)}
+                    sx={{
+                      ...metricTileBaseSx,
+                      backgroundColor: card.backgroundColor,
+                      color: card.color,
+                      border: "1px solid",
+                      borderColor: isActive ? "#16302A" : card.borderColor,
+                    }}
+                  >
+                    <Typography variant="overline" sx={{ opacity: 0.9 }}>
+                      {card.title}
+                    </Typography>
+                    <Typography
+                      variant="h3"
+                      sx={{ fontSize: { xs: 28, md: 42 }, lineHeight: 1 }}
+                    >
+                      {card.value}
+                    </Typography>
+                    <Typography variant="body2" sx={{ opacity: 0.9, fontSize: { xs: 12, md: 14 } }}>
+                      {card.caption}
+                    </Typography>
+                  </Paper>
+                );
+              })}
+            </Box>
+
+            <Paper
+              sx={{
+                ...surfaceSx,
+                width: { xs: "100%", xl: 280 },
+                p: { xs: 1.5, md: 2 },
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                gap: 1,
+                order: { xs: 1, xl: 2 },
+              }}
+            >
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => navigate("/registrar")}
+                fullWidth
+              >
+                Registrar participante
+              </Button>
+              {isAdmin && (
+                <Box display="flex" flexDirection="column" gap={1}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<AssessmentOutlinedIcon />}
+                    onClick={() => navigate("/reporte-financiero")}
+                    fullWidth
+                  >
+                    Ver reportes
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<PersonAddAltOutlinedIcon />}
+                    onClick={() => navigate("/registrar-usuario")}
+                    fullWidth
+                  >
+                    Registrar usuario
+                  </Button>
+                </Box>
+              )}
+            </Paper>
+          </Box>
         </Box>
       </Box>
 
-      <Divider orientation="horizontal" flexItem />
-
       {dataError && (
-        <Alert severity="error" sx={{ mt: 2 }}>
+        <Alert severity="error" sx={{ mt: 2, borderRadius: 0 }}>
           {dataError}
         </Alert>
       )}
 
-      <Box
-        display="flex"
-        my={{ xs: 2, sm: 4 }}
-        flexDirection={{ xs: "column", sm: "row" }}
-        justifyContent="center"
-        alignItems={{ xs: "center", sm: "center" }}
-        sx={{ whiteSpace: { xs: "normal", sm: "nowrap" }, overflowX: "auto" }}
-      >
-        <Typography
-          variant="h6"
-          sx={{ fontSize: { xs: 14, sm: 18 }, fontWeight: "bold" }}
-        >
-          Total participantes:
-          <span style={{ fontWeight: "normal", marginLeft: 6 }}>
-            {totalParticipantes}
-          </span>
-        </Typography>
-        <Divider orientation="vertical" flexItem sx={{ mx: 2 }} />
-        <Typography
-          variant="h6"
-          color="success.main"
-          sx={{ fontSize: { xs: 14, sm: 18 }, fontWeight: "bold" }}
-        >
-          Pagados:
-          <span style={{ fontWeight: "normal", marginLeft: 6 }}>{pagados}</span>
-        </Typography>
-        <Divider orientation="vertical" flexItem sx={{ mx: 2 }} />
-        <Typography
-          variant="h6"
-          color="warning.main"
-          sx={{
-            fontSize: { xs: 14, sm: 18 },
-            fontWeight: "bold",
-            cursor: pendientes > 0 ? "pointer" : "default",
-            textDecoration: pendientes > 0 ? "underline" : "none",
-          }}
-          onClick={() => pendientes > 0 && setOpenPendientes(true)}
-        >
-          Pendientes:
-          <span style={{ fontWeight: "normal", marginLeft: 6 }}>
-            {pendientes}
-          </span>
-        </Typography>
-        {/* Modal para mostrar los nombres de los pendientes */}
-        <Modal open={openPendientes} onClose={() => setOpenPendientes(false)}>
-          <Paper
-            sx={{
-              maxWidth: 400,
-              mx: "auto",
-              mt: 10,
-              p: 3,
-              borderRadius: 2,
-              boxShadow: 6,
-            }}
-          >
-            <Typography
-              variant="h6"
-              fontWeight="bold"
-              gutterBottom
-              color="warning.main"
-            >
-              Participantes Pendientes
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            {pendientesList.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No hay participantes pendientes.
-              </Typography>
-            ) : (
-              <Box sx={{ maxHeight: 300, overflowY: "auto", mb: 2 }}>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Nombre</TableCell>
-                      <TableCell>Apellido</TableCell>
-                      <TableCell>Teléfono</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {pendientesList
-                      .slice()
-                      .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""))
-                      .map((p, idx) => (
-                        <TableRow key={p.id || idx}>
-                          <TableCell>{p.nombre}</TableCell>
-                          <TableCell>{p.apellido}</TableCell>
-                          <TableCell>{p.telefono}</TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </Box>
-            )}
-            <Button
-              variant="contained"
-              color="primary"
-              fullWidth
-              sx={{ mt: 2 }}
-              onClick={() => setOpenPendientes(false)}
-            >
-              Cerrar
-            </Button>
-          </Paper>
-        </Modal>
-        <Divider orientation="vertical" flexItem sx={{ mx: 2 }} />
-        <Typography
-          variant="h6"
-          color="text.secondary"
-          sx={{
-            fontSize: { xs: 14, sm: 18 },
-            fontWeight: "bold",
-            cursor: "pointer",
-            textDecoration: exentos.length > 0 ? "underline" : "none",
-          }}
-          onClick={() => exentos.length > 0 && setOpenExentos(true)}
-        >
-          Exentos:
-          <span style={{ fontWeight: "normal", marginLeft: 6 }}>
-            {exentos.length}
-          </span>
-        </Typography>
-        {/* Modal para mostrar los nombres de los exentos */}
-        <Modal open={openExentos} onClose={() => setOpenExentos(false)}>
-          <Paper
-            sx={{
-              maxWidth: 400,
-              mx: "auto",
-              mt: 10,
-              p: 3,
-              borderRadius: 2,
-              boxShadow: 6,
-            }}
-          >
-            <Typography
-              variant="h6"
-              fontWeight="bold"
-              gutterBottom
-              color="text.secondary"
-            >
-              Participantes Exentos
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            {exentos.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No hay participantes exentos.
-              </Typography>
-            ) : (
-              <Box sx={{ maxHeight: 300, overflowY: "auto", mb: 2 }}>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Nombre</TableCell>
-                      <TableCell>Apellido</TableCell>
-                      <TableCell>Teléfono</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {exentos
-                      .slice() // copia para no mutar el array original
-                      .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""))
-                      .map((p, idx) => (
-                        <TableRow key={p.id || idx}>
-                          <TableCell>{p.nombre}</TableCell>
-                          <TableCell>{p.apellido}</TableCell>
-                          <TableCell>{p.telefono}</TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </Box>
-            )}
-            <Button
-              variant="contained"
-              color="primary"
-              fullWidth
-              sx={{ mt: 2 }}
-              onClick={() => setOpenExentos(false)}
-            >
-              Cerrar
-            </Button>
-          </Paper>
-        </Modal>
-      </Box>
+      {legacyPaidCount > 0 && (
+        <Alert severity="warning" sx={{ mt: 2, borderRadius: 0 }}>
+          Hay {legacyPaidCount} pagados legacy sin monto trazable. Se muestran marcados para revisión operativa.
+        </Alert>
+      )}
 
-      <Box
-        display="flex"
-        gap={2}
-        mb={2}
-        justifyContent="center"
-        alignItems="center"
-        sx={{ mx: { xs: 1, sm: 4 } }}
-      >
-        <Button
-          variant="contained"
-          onClick={() => navigate("/registrar")}
+      <Paper sx={{ ...surfaceSx, mt: 3 }}>
+        <Box
           sx={{
-            fontSize: { xs: 11, sm: 14 },
-            minWidth: 100,
-            py: { xs: 0.5, sm: 0.8 },
-            px: { xs: 1, sm: 2 },
-            mx: 0.5,
+            p: { xs: 1.5, md: 3 },
+            display: "flex",
+            flexDirection: "column",
+                gap: 1,
           }}
         >
-          Registrar participante
-        </Button>
-        {isAdmin && (
-          <>
-            <Button
-              variant="outlined"
-              color="primary"
-              onClick={() => navigate("/reporte-financiero")}
-              sx={{
-                fontSize: { xs: 11, sm: 14 },
-                minWidth: 100,
-                py: { xs: 0.5, sm: 0.8 },
-                px: { xs: 1, sm: 2 },
-                mx: 0.5,
-              }}
+          <Box
+            display="flex"
+            flexDirection={{ xs: "column", lg: "row" }}
+            justifyContent="space-between"
+            gap={2}
+          >
+            <Box>
+              <Typography variant="h5">Participantes</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                {statusFilter === "todos"
+                  ? `Mostrando ${datosFiltrados.length} participantes de ${totalParticipantes}.`
+                  : `${summaryCards.find((card) => card.key === statusFilter)?.title || "Estado"}: ${datosFiltrados.length} resultados.`}
+              </Typography>
+            </Box>
+            <Box
+              display="flex"
+              flexDirection={{ xs: "column", sm: "row" }}
+              gap={1}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              flexWrap="wrap"
             >
-              Ver reporte financiero
-            </Button>
-            <Button
-              variant="outlined"
-              color="secondary"
-              onClick={() => navigate("/registrar-usuario")}
-              sx={{
-                fontSize: { xs: 11, sm: 14 },
-                minWidth: 100,
-                py: { xs: 0.5, sm: 0.8 },
-                px: { xs: 1, sm: 2 },
-                mx: 0.5,
-              }}
-            >
-              Registrar usuario
-            </Button>
-          </>
-        )}
-      </Box>
-
-      <Box
-        display="flex"
-        gap={2}
-        mb={2}
-        pt={2}
-        flexWrap="nowrap"
-        alignItems="flex-start"
-        width="100%"
-      >
-        <TextField
-          label="Buscar por nombre, apellido o cédula"
-          value={filtro}
-          size="small"
-          onChange={(e) => setFiltro(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-            endAdornment: filtro ? (
-              <InputAdornment position="end">
-                <IconButton
-                  aria-label="Limpiar búsqueda"
+              <TextField
+                label="Buscar participante"
+                placeholder="Nombre o cédula"
+                value={filtro}
+                size="small"
+                onChange={(e) => setFiltro(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: filtro ? (
+                    <InputAdornment position="end">
+                      <IconButton
+                        aria-label="Limpiar búsqueda"
+                        size="small"
+                        onClick={() => setFiltro("")}
+                        edge="end"
+                      >
+                        <Typography variant="caption" fontWeight={700}>
+                          Limpiar
+                        </Typography>
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                }}
+                sx={{ minWidth: { xs: "100%", sm: 300 } }}
+              />
+              <Box
+                sx={{
+                  display: "flex",
+                  gap: 1,
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                }}
+              >
+                <TextField
+                  select
+                  label="Orden"
+                  value={sortColumn}
+                  onChange={(e) => setSortColumn(e.target.value)}
+                  SelectProps={{ native: true }}
                   size="small"
-                  onClick={() => setFiltro("")}
-                  edge="end"
+                  sx={{ minWidth: 180 }}
                 >
-                  <span className="material-icons" style={{ fontSize: 20 }}>
-                    x
-                  </span>
-                </IconButton>
-              </InputAdornment>
-            ) : null,
-          }}
-          sx={{ flex: 2, minWidth: 120 }}
-        />
-        <TextField
-          select
-          label="Ordenar por"
-          value={sortColumn}
-          onChange={(e) => setSortColumn(e.target.value)}
-          SelectProps={{ native: true }}
-          size="small"
-          sx={{ flex: 1, minWidth: 100 }}
-        >
-          <option value="nombre">Nombre</option>
-          <option value="apellido">Apellido</option>
-          <option value="cedula">Cédula</option>
-          <option value="telefono">Teléfono</option>
-          <option value="edad">Edad</option>
-          <option value="pago">Pago</option>
-          <option value="formaPago">Forma de pago</option>
-          <option value="registradoPor">Registrado por</option>
-        </TextField>
-        <TextField
-          select
-          label="Dirección"
-          value={sortDirection}
-          onChange={(e) => setSortDirection(e.target.value)}
-          SelectProps={{ native: true }}
-          size="small"
-          sx={{ flex: 1, minWidth: 100 }}
-        >
-          <option value="asc">Ascendente</option>
-          <option value="desc">Descendente</option>
-        </TextField>
-      </Box>
+                  {sortOptions.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </TextField>
+                <Button
+                  variant="outlined"
+                  startIcon={<SwapVertIcon />}
+                  onClick={() =>
+                    setSortDirection((currentDirection) =>
+                      currentDirection === "asc" ? "desc" : "asc"
+                    )
+                  }
+                  sx={{ whiteSpace: "nowrap" }}
+                >
+                  {sortDirection === "asc" ? "Ascendente" : "Descendente"}
+                </Button>
+              </Box>
+            </Box>
+          </Box>
 
-      <Box sx={{ width: "100%", overflowX: "auto" }}>
-        <Table sx={{ minWidth: 650 }}>
-          <TableHead>
-            <TableRow>
-              <TableCell>Nombre</TableCell>
-              <TableCell>Cédula</TableCell>
-              <TableCell>Teléfono</TableCell>
-              <TableCell>Edad</TableCell>
-              <TableCell>Estado</TableCell>
-              <TableCell>Pago</TableCell>
-              <TableCell>Registrado por</TableCell>
-              <TableCell>Acciones</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {datosFiltrados.map((p) => (
-              <TableRow key={p.id}>
-                <TableCell>
-                  {p.nombre} {p.apellido}
-                </TableCell>
-                <TableCell>{p.cedula}</TableCell>
-                <TableCell>{p.telefono}</TableCell>
-                <TableCell>{p.edad ? p.edad : "-"}</TableCell>
-                <TableCell>
-                  {(() => {
-                    const monto = parseFloat(p.montoPagado) || 0;
-                    if (p.exento) {
-                      return (
-                        <Chip
-                          label="Exento"
-                          sx={{ backgroundColor: "#9b70d7ff", color: "#ffffffff" }}
-                        />
-                      );
-                    }
-                    // Si el registro tiene el campo pago en true y no tiene montoPagado, es un pagado antiguo
-                    if (p.pago && (!p.montoPagado || monto === 0)) {
-                      return <Chip label="Pagado" color="success" />;
-                    }
-                    if (monto === 0) {
-                      return (
-                        <Chip
-                          label={`Pendiente $${costoCongreso.toFixed(2)}`}
-                          color="warning"
-                        />
-                      );
-                    }
-                    if (monto < costoCongreso) {
-                      return (
-                        <Chip
-                          label={`Pendiente $${(costoCongreso - monto).toFixed(
-                            2
-                          )}`}
-                          color="warning"
-                        />
-                      );
-                    }
-                    if (monto === costoCongreso) {
-                      return <Chip label="Pagado" color="success" />;
-                    }
-                    if (monto > costoCongreso) {
-                      return (
-                        <Chip
-                          label={`Pagado +$${(monto - costoCongreso).toFixed(
-                            2
-                          )}`}
-                          color="info"
-                        />
-                      );
-                    }
-                  })()}
-                </TableCell>
-                <TableCell>
-                  {p.pago
-                    ? p.segundaFormaPago
-                      ? `${p.formaPago} / ${p.segundaFormaPago}`
-                      : p.formaPago
-                    : "-"}
-                </TableCell>
-                <TableCell>{p.registradoPor}</TableCell>
-                <TableCell>
-                  <IconButton onClick={() => navigate(`/editar/${p.id}`)}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    color="error"
-                    onClick={() => eliminarParticipante(p.id)}
+          <Box display="flex" flexWrap="wrap" gap={1} alignItems="center">
+            {summaryCards.map((card) => {
+              const isActive =
+                (statusFilter === "todos" && card.key === "todos") ||
+                statusFilter === card.key;
+
+              return (
+                <Button
+                  key={card.key}
+                  variant={isActive ? "contained" : "outlined"}
+                  onClick={() => toggleStatusFilter(card.key)}
+                  sx={{
+                    color: isActive ? card.color : "text.primary",
+                    backgroundColor: isActive ? card.backgroundColor : "transparent",
+                    borderColor: isActive ? card.borderColor : "divider",
+                    "&:hover": {
+                      backgroundColor: isActive ? card.backgroundColor : "#EEE8D8",
+                      borderColor: isActive ? card.borderColor : "#D8D1C2",
+                    },
+                  }}
+                >
+                  {card.title}
+                </Button>
+              );
+            })}
+            <Typography variant="caption" color="text.secondary" sx={{ ml: { xs: 0, sm: 1 } }}>
+              Orden: {activeSortLabel} · {sortDirection === "asc" ? "asc" : "desc"}
+            </Typography>
+          </Box>
+
+          <Box sx={{ display: { xs: "grid", sm: "none" }, gap: 1 }}>
+            {datosFiltrados.length === 0 ? (
+              <Paper sx={{ ...surfaceSx, p: 2, textAlign: "center" }}>
+                <Typography variant="h6">Sin resultados</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Ajusta la búsqueda o limpia el filtro para volver a ver participantes.
+                </Typography>
+                {(filtro || statusFilter !== "todos") && (
+                  <Button
+                    variant="text"
+                    sx={{ mt: 1.5 }}
+                    onClick={() => {
+                      setFiltro("");
+                      setStatusFilter("todos");
+                    }}
                   >
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Box>
+                    Limpiar vista
+                  </Button>
+                )}
+              </Paper>
+            ) : (
+              datosFiltrados.map((participant) => {
+                const status = getParticipantStatus(participant, costoCongreso);
+                const paymentStatus = getParticipantPaymentStatus(participant, costoCongreso);
+                const paymentLabel = participant.pago
+                  ? participant.segundaFormaPago
+                    ? `${participant.formaPago} / ${participant.segundaFormaPago}`
+                    : participant.formaPago
+                  : "-";
+
+                return (
+                  <Paper key={participant.id} sx={{ ...surfaceSx, p: 1.5 }}>
+                    <Box display="flex" justifyContent="space-between" gap={1.5}>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                          {participant.nombre} {participant.apellido}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                          Cédula: {participant.cedula || "Sin cédula"}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
+                          Teléfono: {participant.telefono || "-"}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
+                          Registro: {participant.registradoPor || "-"}
+                        </Typography>
+                      </Box>
+                      {renderParticipantActions(participant)}
+                    </Box>
+                    <Box display="flex" alignItems="center" justifyContent="space-between" gap={1} mt={1.5}>
+                      <Chip label={status.shortLabel} sx={status.sx} />
+                      <Box sx={{ textAlign: "right" }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                          Pago: {paymentLabel}
+                        </Typography>
+                        {paymentStatus.isLegacyPaid && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
+                            Registro heredado sin monto exacto.
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  </Paper>
+                );
+              })
+            )}
+          </Box>
+
+          <Box sx={{ display: { xs: "none", sm: "block" }, width: "100%", overflowX: "auto", border: "1px solid #D8D1C2" }}>
+            <Table sx={{ minWidth: 760 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>
+                    <Button color="inherit" onClick={() => toggleSort("nombre")}>
+                      Nombre
+                    </Button>
+                  </TableCell>
+                  <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+                    <Button color="inherit" onClick={() => toggleSort("cedula")}>
+                      Cédula
+                    </Button>
+                  </TableCell>
+                  <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                    <Button color="inherit" onClick={() => toggleSort("telefono")}>
+                      Teléfono
+                    </Button>
+                  </TableCell>
+                  <TableCell sx={{ display: { xs: "none", lg: "table-cell" } }}>
+                    <Button color="inherit" onClick={() => toggleSort("edad")}>
+                      Edad
+                    </Button>
+                  </TableCell>
+                  <TableCell>Estado</TableCell>
+                  <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                    <Button color="inherit" onClick={() => toggleSort("formaPago")}>
+                      Pago
+                    </Button>
+                  </TableCell>
+                  <TableCell sx={{ display: { xs: "none", lg: "table-cell" } }}>
+                    <Button color="inherit" onClick={() => toggleSort("registradoPor")}>
+                      Registro
+                    </Button>
+                  </TableCell>
+                  <TableCell align="right">Acciones</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {datosFiltrados.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} sx={{ py: 6, textAlign: "center" }}>
+                      <Typography variant="h6">Sin resultados</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        Ajusta la búsqueda o limpia el filtro para volver a ver participantes.
+                      </Typography>
+                      {(filtro || statusFilter !== "todos") && (
+                        <Button
+                          variant="text"
+                          sx={{ mt: 2 }}
+                          onClick={() => {
+                            setFiltro("");
+                            setStatusFilter("todos");
+                          }}
+                        >
+                          Limpiar vista
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  datosFiltrados.map((p) => {
+                    const status = getParticipantStatus(p, costoCongreso);
+                    const paymentStatus = getParticipantPaymentStatus(p, costoCongreso);
+                    const paymentLabel = p.pago
+                      ? p.segundaFormaPago
+                        ? `${p.formaPago} / ${p.segundaFormaPago}`
+                        : p.formaPago
+                      : "-";
+
+                    return (
+                      <TableRow
+                        key={p.id}
+                        hover
+                        sx={{
+                          "& td": {
+                            borderBottomColor: "#E4DDCE",
+                            py: 1.25,
+                            verticalAlign: "top",
+                          },
+                        }}
+                      >
+                        <TableCell sx={{ minWidth: { xs: 190, sm: 220 } }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                            {p.nombre} {p.apellido}
+                          </Typography>
+                          <Box
+                            sx={{
+                              mt: 0.5,
+                              display: "grid",
+                              gap: 0.25,
+                              color: "text.secondary",
+                            }}
+                          >
+                            <Typography variant="caption" sx={{ display: { xs: "block", sm: "none" } }}>
+                              Cédula: {p.cedula || "Sin cédula"}
+                            </Typography>
+                            <Typography variant="caption" sx={{ display: { xs: "block", md: "none" } }}>
+                              Teléfono: {p.telefono || "-"}
+                            </Typography>
+                            <Typography variant="caption" sx={{ display: { xs: "block", lg: "none" } }}>
+                              Registro: {p.registradoPor || "-"}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+                          {p.cedula}
+                        </TableCell>
+                        <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                          {p.telefono}
+                        </TableCell>
+                        <TableCell sx={{ display: { xs: "none", lg: "table-cell" } }}>
+                          {p.edad || "-"}
+                        </TableCell>
+                        <TableCell sx={{ minWidth: 150 }}>
+                          <Chip
+                            label={status.shortLabel}
+                            sx={{ ...status.sx, display: { xs: "inline-flex", sm: "none" } }}
+                          />
+                          <Chip
+                            label={status.label}
+                            sx={{ ...status.sx, display: { xs: "none", sm: "inline-flex" } }}
+                          />
+                          {paymentStatus.isLegacyPaid && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                              Sin monto trazable
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                          <Typography variant="body2">{paymentLabel}</Typography>
+                          {paymentStatus.isLegacyPaid && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                              Legacy por conciliar
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell sx={{ display: { xs: "none", lg: "table-cell" } }}>
+                          <Typography variant="body2">{p.registradoPor || "-"}</Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          {renderParticipantActions(p)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </Box>
+
+          <Box
+            display="flex"
+            flexDirection={{ xs: "column", md: "row" }}
+            justifyContent="space-between"
+            alignItems={{ xs: "flex-start", md: "center" }}
+            gap={1.5}
+          >
+            <Typography variant="body2" color="text.secondary">
+              {pendientesList.length} pendientes, {exentos.length} exentos y {legacyPaidCount} legacy en total.
+            </Typography>
+            <Button
+              variant="text"
+              endIcon={<ArrowOutwardIcon fontSize="small" />}
+              onClick={() => navigate("/registrar")}
+            >
+              Nuevo registro
+            </Button>
+          </Box>
+        </Box>
+      </Paper>
     </Container>
   );
 }

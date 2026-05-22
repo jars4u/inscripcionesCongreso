@@ -10,12 +10,15 @@ import {
   where,
 } from "firebase/firestore";
 import {
+  Alert,
+  Box,
+  Button,
+  Checkbox,
   Container,
+  Divider,
+  Paper,
   TextField,
   Typography,
-  Button,
-  Box,
-  Checkbox,
   FormControlLabel,
   Select,
   MenuItem,
@@ -23,8 +26,24 @@ import {
   FormControl,
 } from "@mui/material";
 import { db } from "../firebase";
+import {
+  DEFAULT_APP_CONFIG,
+  buildPaymentLine,
+  getActivePaymentMethods,
+  getAppConfig,
+  getEventCost,
+  summarizePayments,
+} from "../utils/paymentConfig";
+
+const surfaceSx = {
+  backgroundColor: "#FFFFFF",
+  border: "1px solid #D8D1C2",
+  borderRadius: 0,
+  boxShadow: "none",
+};
 
 export default function EditParticipant() {
+  const [config, setConfig] = useState(DEFAULT_APP_CONFIG);
   const [pago, setPago] = useState(false);
   const [exento, setExento] = useState(false);
   const [miembro, setMiembro] = useState(false);
@@ -37,6 +56,8 @@ export default function EditParticipant() {
     );
   const { id } = useParams();
   const navigate = useNavigate();
+  const paymentMethods = getActivePaymentMethods(config);
+  const costoCongreso = getEventCost(config);
 
   const [loading, setLoading] = useState(true);
   const [nombre, setNombre] = useState("");
@@ -47,8 +68,6 @@ export default function EditParticipant() {
   const [edad, setEdad] = useState("");
   const [montoPagado, setMontoPagado] = useState("");
   const [montoPagado2, setMontoPagado2] = useState("");
-  const [fechaPago, setFechaPago] = useState("");
-  const [tasaBCVPago, setTasaBCVPago] = useState("");
   const [historialPagos, setHistorialPagos] = useState([]);
   const [formaPago, setFormaPago] = useState("");
   const [referencia, setReferencia] = useState("");
@@ -113,6 +132,8 @@ export default function EditParticipant() {
   useEffect(() => {
     const cargarParticipante = async () => {
       try {
+        const nextConfig = await getAppConfig();
+        setConfig(nextConfig);
         const docRef = doc(db, "participantes", id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
@@ -135,14 +156,23 @@ export default function EditParticipant() {
             data.pago &&
             (!data.montoPagado || parseFloat(data.montoPagado) === 0)
           ) {
-            setMontoPagado("8");
+            setMontoPagado(String(getEventCost(nextConfig)));
           } else {
             setMontoPagado(
-              data.montoPagado !== undefined ? String(data.montoPagado) : ""
+              data.montoOriginalPago !== undefined
+                ? String(data.montoOriginalPago)
+                : data.montoPagado !== undefined
+                ? String(data.montoPagado)
+                : ""
             );
           }
-          setFechaPago(data.fechaPago || "");
-          setTasaBCVPago(data.tasaBCVPago || "");
+          setMontoPagado2(
+            data.montoOriginalPago2 !== undefined
+              ? String(data.montoOriginalPago2)
+              : data.montoPagado2 !== undefined
+              ? String(data.montoPagado2)
+              : ""
+          );
           setHistorialPagos(data.historialPagos || []);
           setFormaPago(data.formaPago || "");
           setReferencia(data.referencia || "");
@@ -170,14 +200,68 @@ export default function EditParticipant() {
       return;
     }
     try {
-          const monto1 = parseFloat(montoPagado) || 0;
-          const monto2 = agregarSegundaForma ? parseFloat(montoPagado2) || 0 : 0;
-          const montoTotal = monto1 + monto2;
+      const paymentLine1 = buildPaymentLine({
+        amount: montoPagado,
+        methodName: formaPago,
+        reference: referencia,
+        zelleInfo,
+        exchangeRate: 0,
+        config,
+      });
+      let tasaBCVActual = 0;
+      const paymentLine2 = agregarSegundaForma
+        ? buildPaymentLine({
+            amount: montoPagado2,
+            methodName: segundaFormaPago,
+            reference: referencia2,
+            zelleInfo: zelleInfo2,
+            exchangeRate: 0,
+            config,
+          })
+        : null;
+      const requiresBcv = [paymentLine1, paymentLine2].some(
+        (line) => line?.currency === "bs"
+      );
+      if (requiresBcv) {
+        try {
+          const resp = await fetch(
+            "https://pydolarve.org/api/v1/dollar?page=bcv&monitor=usd"
+          );
+          const json = await resp.json();
+          tasaBCVActual = json && json.price ? parseFloat(json.price) : 0;
+        } catch (e) {
+          tasaBCVActual = 0;
+        }
+      }
+      const normalizedLine1 = buildPaymentLine({
+        amount: montoPagado,
+        methodName: formaPago,
+        reference: referencia,
+        zelleInfo,
+        exchangeRate: tasaBCVActual,
+        config,
+      });
+      const normalizedLine2 = agregarSegundaForma
+        ? buildPaymentLine({
+            amount: montoPagado2,
+            methodName: segundaFormaPago,
+            reference: referencia2,
+            zelleInfo: zelleInfo2,
+            exchangeRate: tasaBCVActual,
+            config,
+          })
+        : null;
+      const paymentLines = [normalizedLine1, normalizedLine2].filter(
+        (line) => line && line.amountOriginal > 0
+      );
+      const { totalUsd: montoTotal } = summarizePayments(paymentLines);
+      const monto1 = normalizedLine1.amountUsd;
+      const monto2 = normalizedLine2?.amountUsd || 0;
       let pago = false;
       let excedente = 0;
-          if (montoTotal >= 8) {
+      if (montoTotal >= costoCongreso) {
         pago = true;
-            excedente = montoTotal > 8 ? montoTotal - 8 : 0;
+        excedente = montoTotal > costoCongreso ? montoTotal - costoCongreso : 0;
       }
       const docRef = doc(db, "participantes", id);
       // Leer el participante actual para comparar montoPagado
@@ -194,33 +278,38 @@ export default function EditParticipant() {
             pago,
             montoPagado: exento ? 0 : montoTotal,
             excedente: exento ? 0 : excedente,
-            formaPago: exento ? "Exento" : monto1 > 0 ? formaPago : "",
+            formaPago: exento ? "Exento" : monto1 > 0 ? normalizedLine1.methodName : "",
             referencia: exento
               ? ""
-              : monto1 > 0 && formaPago === "Pago movil"
-              ? referencia
+              : monto1 > 0
+              ? normalizedLine1.reference
               : "",
             zelleInfo: exento
               ? ""
-              : monto1 > 0 && formaPago === "Zelle"
-              ? zelleInfo
+              : monto1 > 0
+              ? normalizedLine1.zelleInfo
               : "",
             segundaFormaPago: exento
               ? ""
-              : agregarSegundaForma
-              ? segundaFormaPago
+              : normalizedLine2?.amountUsd > 0
+              ? normalizedLine2.methodName
               : "",
             montoPagado2: exento ? 0 : monto2,
             referencia2: exento
               ? ""
-              : agregarSegundaForma && monto2 > 0 && segundaFormaPago === "Pago movil"
-              ? referencia2
+              : normalizedLine2?.amountUsd > 0
+              ? normalizedLine2.reference
               : "",
             zelleInfo2: exento
               ? ""
-              : agregarSegundaForma && monto2 > 0 && segundaFormaPago === "Zelle"
-              ? zelleInfo2
+              : normalizedLine2?.amountUsd > 0
+              ? normalizedLine2.zelleInfo
               : "",
+            monedaPago: exento ? "" : normalizedLine1.currency,
+            monedaPago2: exento ? "" : normalizedLine2?.currency || "",
+            montoOriginalPago: exento ? 0 : normalizedLine1.amountOriginal,
+            montoOriginalPago2: exento ? 0 : normalizedLine2?.amountOriginal || 0,
+            pagosDetalle: exento ? [] : paymentLines,
             exento,
           };
       let montoAnterior = 0;
@@ -233,20 +322,11 @@ export default function EditParticipant() {
           : [];
       }
       // Si el montoPagado cambió y es mayor a 0, registrar fecha y tasa BCV en historial
-           if (montoTotal > 0 && montoTotal !== montoAnterior) {
-        let tasaBCVActual = 0;
-        try {
-          const resp = await fetch(
-            "https://pydolarve.org/api/v1/dollar?page=bcv&monitor=usd"
-          );
-          const json = await resp.json();
-          tasaBCVActual = json && json.price ? parseFloat(json.price) : 0;
-        } catch (e) {
-          tasaBCVActual = 0;
-        }
+      if (montoTotal > 0 && montoTotal !== montoAnterior) {
              const nuevoPago = {
                fecha: new Date().toISOString(),
                monto: montoTotal,
+               lineas: paymentLines,
                tasaBCV: tasaBCVActual,
              };
         updateData.fechaPago = nuevoPago.fecha;
@@ -264,53 +344,91 @@ export default function EditParticipant() {
 
   if (loading) {
     return (
-      <Typography variant="h6" align="center" mt={4}>
-        Cargando datos...
-      </Typography>
+      <Container maxWidth="sm" sx={{ py: { xs: 2, md: 4 } }}>
+        <Paper sx={{ ...surfaceSx, p: 4, textAlign: "center" }}>
+          <Typography variant="h6">Cargando datos...</Typography>
+        </Paper>
+      </Container>
     );
   }
 
   return (
-    <Container maxWidth="sm" sx={{ px: { xs: 1, sm: 2 } }}>
-      <Box mt={{ xs: 2, sm: 5 }}>
-        <Typography variant="h5" sx={{ fontSize: { xs: 20, sm: 28 } }}>
-          Editar Participante
-        </Typography>
-        {/* Historial de pagos/abonos con fecha y tasa BCV */}
-        {!loading && historialPagos && historialPagos.length > 0 && (
-          <Box mb={2}>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ fontSize: 12 }}
-            >
-              Historial de pagos/abonos:
-            </Typography>
+    <Container maxWidth="lg" sx={{ py: { xs: 1.5, md: 4 } }}>
+      <Box display="grid" gap={2}>
+        <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 3.5 } }}>
+          <Box
+            display="flex"
+            flexDirection={{ xs: "column", lg: "row" }}
+            justifyContent="space-between"
+            gap={2}
+          >
             <Box>
-              {historialPagos.map((h, idx) => (
-                <Typography
-                  key={idx}
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontSize: 12, display: "block" }}
-                >
-                  {new Date(h.fecha).toLocaleString("es-VE", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}{" "}
-                  | Monto: ${h.monto.toFixed(2)} | Tasa BCV: Bs.{" "}
-                  {h.tasaBCV
-                    ? h.tasaBCV.toLocaleString("de-DE", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })
-                    : "No disponible"}
-                </Typography>
-              ))}
+              <Typography variant="overline" sx={{ color: "primary.main", letterSpacing: "0.12em" }}>
+                Edición
+              </Typography>
+              <Typography variant="h3" sx={{ fontSize: { xs: 28, md: 40 }, mt: 0.5 }}>
+                Editar participante
+              </Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ mt: 1, maxWidth: 620, fontSize: { xs: 14, md: 16 } }}>
+                Actualiza el registro sin perder trazabilidad de pago.
+              </Typography>
             </Box>
+
+            <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 2 }, minWidth: { xs: "100%", lg: 340 }, backgroundColor: "#F7F3E8" }}>
+              <Typography variant="overline" color="text.secondary">
+                Historial de pagos
+              </Typography>
+              {historialPagos && historialPagos.length > 0 ? (
+                <Box sx={{ mt: 1.5, display: "grid", gap: 1 }}>
+                  {historialPagos.map((h, idx) => (
+                    <Box key={idx} sx={{ ...surfaceSx, p: 1.5, backgroundColor: "#FFFFFF" }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {new Date(h.fecha).toLocaleString("es-VE", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </Typography>
+                      <Typography variant="body2" sx={{ mt: 0.5 }}>
+                        Monto: ${h.monto.toFixed(2)}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Tasa BCV: Bs. {h.tasaBCV
+                          ? h.tasaBCV.toLocaleString("de-DE", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })
+                          : "No disponible"}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              ) : (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+                  Aún no hay historial de pagos registrado para este participante.
+                </Typography>
+              )}
+            </Paper>
           </Box>
+        </Paper>
+
+        {(errores.nombre || errores.apellido || errores.cedula || errores.telefono) && (
+          <Alert severity="error" sx={{ borderRadius: 0 }}>
+            Revisa los campos obligatorios antes de guardar.
+          </Alert>
         )}
-        <Box display="flex" gap={2} mb={2}>
+
+        <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 3 } }}>
+          <Typography variant="overline" color="text.secondary">
+            Datos personales
+          </Typography>
+          <Box
+            sx={{
+              mt: 2,
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
+              gap: { xs: 1.5, md: 2 },
+            }}
+          >
           <TextField
             fullWidth
             label="Nombre"
@@ -319,7 +437,6 @@ export default function EditParticipant() {
             margin="normal"
             error={!!errores.nombre}
             helperText={errores.nombre}
-            sx={{ fontSize: { xs: 12, sm: 16 } }}
           />
           <TextField
             fullWidth
@@ -329,10 +446,16 @@ export default function EditParticipant() {
             margin="normal"
             error={!!errores.apellido}
             helperText={errores.apellido}
-            sx={{ fontSize: { xs: 12, sm: 16 } }}
           />
         </Box>
-        <Box display="flex" gap={2} mb={2}>
+        <Box
+          sx={{
+            mt: 0,
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
+            gap: { xs: 1.5, md: 2 },
+          }}
+        >
           <TextField
             fullWidth
             label="Cédula"
@@ -341,7 +464,6 @@ export default function EditParticipant() {
             margin="normal"
             error={!!errores.cedula}
             helperText={errores.cedula}
-            sx={{ fontSize: { xs: 12, sm: 16 } }}
           />
           <TextField
             fullWidth
@@ -351,14 +473,16 @@ export default function EditParticipant() {
             margin="normal"
             error={!!errores.telefono}
             helperText={errores.telefono}
-            sx={{ fontSize: { xs: 12, sm: 16 } }}
           />
         </Box>
         <Box
-          display="flex"
-          flexDirection={{ xs: "column", sm: "row" }}
-          alignItems={{ xs: "stretch", sm: "center" }}
-          gap={2}
+          sx={{
+            mt: 1,
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 180px" },
+            gap: { xs: 1.5, md: 2 },
+            alignItems: "center",
+          }}
         >
           <TextField
             type="date"
@@ -367,22 +491,20 @@ export default function EditParticipant() {
             value={fechaNacimiento}
             onChange={handleFechaNacimiento}
             margin="normal"
-            sx={{ flex: 1, fontSize: { xs: 12, sm: 16 } }}
           />
-          <Typography
-            sx={{
-              width: { xs: "100%", sm: 120 },
-              ml: { xs: 0, sm: 1 },
-              fontSize: { xs: 12, sm: 16 },
-              textAlign: { xs: "left", sm: "center" },
-            }}
-            variant="body1"
-          >
-            Edad: {edad ? edad : "-"}
-          </Typography>
+          <Paper sx={{ ...surfaceSx, p: 2, backgroundColor: "#F7F3E8" }}>
+            <Typography variant="caption" color="text.secondary">
+              Edad calculada
+            </Typography>
+            <Typography variant="h6" sx={{ mt: 0.5 }}>
+              {edad ? edad : "-"}
+            </Typography>
+          </Paper>
         </Box>
-        {/* Opción de miembro y bautizado */}
-        <Box display="flex" gap={2} mb={1}>
+
+        <Divider sx={{ my: { xs: 2, md: 2.5 } }} />
+
+        <Box display="flex" flexWrap="wrap" gap={1}>
           <FormControlLabel
             control={
               <Checkbox
@@ -391,6 +513,7 @@ export default function EditParticipant() {
               />
             }
             label="Miembro"
+            sx={{ ...surfaceSx, m: 0, px: 1.5, py: 0.5 }}
           />
           <FormControlLabel
             control={
@@ -400,8 +523,9 @@ export default function EditParticipant() {
               />
             }
             label="Bautizado"
+            sx={{ ...surfaceSx, m: 0, px: 1.5, py: 0.5 }}
           />
-          {(!pago || parseFloat(montoPagado) < 8) && (
+          {(!pago || (parseFloat(montoPagado) || 0) < costoCongreso) && (
             <FormControlLabel
               control={
                 <Checkbox
@@ -411,61 +535,69 @@ export default function EditParticipant() {
                 />
               }
               label="Exento"
+              sx={{ ...surfaceSx, m: 0, px: 1.5, py: 0.5 }}
             />
           )}
         </Box>
+        </Paper>
+
         {!exento && (
-          <>
-            <Box display="flex" gap={2} mb={2} alignItems="center">
+          <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 3 } }}>
+            <Typography variant="overline" color="text.secondary">
+              Pago
+            </Typography>
+            <Box
+              sx={{
+                mt: 2,
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
+                gap: { xs: 1.5, md: 2 },
+                alignItems: "start",
+              }}
+            >
               <TextField
                 fullWidth
                 type="number"
-                label="Monto pagado ($)"
+                label={`Monto pagado (${formaPago ? paymentMethods.find((method) => method.nombre === formaPago)?.divisa || "$" : "$"})`}
                 value={montoPagado}
                 onChange={(e) =>
                   setMontoPagado(e.target.value.replace(/[^0-9.]/g, ""))
                 }
                 margin="normal"
                 inputProps={{ min: 0, step: "0.01" }}
-                sx={{ fontSize: { xs: 12, sm: 16 } }}
               />
-              <FormControl
-                fullWidth
-                margin="normal"
-                sx={{ fontSize: { xs: 12, sm: 16 } }}
-              >
+              <FormControl fullWidth margin="normal">
                 <InputLabel id="forma-pago-label">Forma de pago</InputLabel>
                 <Select
                   labelId="forma-pago-label"
                   value={formaPago}
                   label="Forma de pago"
                   onChange={(e) => setFormaPago(e.target.value)}
-                  sx={{ fontSize: { xs: 12, sm: 16 } }}
                 >
-                  <MenuItem value="Pago movil">Pago móvil</MenuItem>
-                  <MenuItem value="Efectivo">Efectivo</MenuItem>
-                  <MenuItem value="Zelle">Zelle</MenuItem>
+                  {paymentMethods.map((method) => (
+                    <MenuItem key={method.id} value={method.nombre}>
+                      {method.nombre} · {method.divisa === "bs" ? "Bs" : "$"}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Box>
-            {formaPago === "Pago movil" && (
+            {paymentMethods.find((method) => method.nombre === formaPago)?.requiereReferencia && (
               <TextField
                 fullWidth
                 margin="normal"
                 label="Número de referencia"
                 value={referencia}
                 onChange={(e) => setReferencia(e.target.value)}
-                sx={{ fontSize: { xs: 12, sm: 16 } }}
               />
             )}
-            {formaPago === "Zelle" && (
+            {paymentMethods.find((method) => method.nombre === formaPago)?.requiereZelleInfo && (
               <TextField
                 fullWidth
                 margin="normal"
                 label="Número de confirmación o nombre del titular"
                 value={zelleInfo}
                 onChange={(e) => setZelleInfo(e.target.value)}
-                sx={{ fontSize: { xs: 12, sm: 16 } }}
               />
             )}
             <FormControlLabel
@@ -473,85 +605,101 @@ export default function EditParticipant() {
                 <Checkbox
                   checked={agregarSegundaForma}
                   onChange={(e) => setAgregarSegundaForma(e.target.checked)}
-                  size="small"
                 />
               }
               label="Segunda forma de pago"
-              sx={{ mt: 2, fontSize: { xs: 12, sm: 16 } }}
+              sx={{ ...surfaceSx, mt: 2, mx: 0, px: 1.5, py: 0.5 }}
             />
             {agregarSegundaForma && (
-              <Box display="flex" gap={2} mb={2} alignItems="center">
+              <Box
+                sx={{
+                  mt: 1,
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
+                  gap: { xs: 1.5, md: 2 },
+                  alignItems: "start",
+                }}
+              >
                 <TextField
                   fullWidth
                   type="number"
-                  label="Monto pagado 2do abono ($)"
+                  label={`Monto pagado 2do abono (${segundaFormaPago ? paymentMethods.find((method) => method.nombre === segundaFormaPago)?.divisa || "$" : "$"})`}
                   value={montoPagado2}
                   onChange={(e) =>
                     setMontoPagado2(e.target.value.replace(/[^0-9.]/g, ""))
                   }
                   margin="normal"
                   inputProps={{ min: 0, step: "0.01" }}
-                  sx={{ fontSize: { xs: 12, sm: 16 } }}
                 />
-                <FormControl fullWidth margin="normal" sx={{ fontSize: { xs: 12, sm: 16 } }}>
+                <FormControl fullWidth margin="normal">
                   <InputLabel id="segunda-forma-pago-label">Segunda forma de pago</InputLabel>
                   <Select
                     labelId="segunda-forma-pago-label"
                     value={segundaFormaPago}
                     label="Segunda forma de pago"
                     onChange={(e) => setSegundaFormaPago(e.target.value)}
-                    sx={{ fontSize: { xs: 12, sm: 16 } }}
                   >
-                    {["Pago movil", "Efectivo", "Zelle"]
-                      .filter((op) => op !== formaPago)
-                      .map((op) => (
-                        <MenuItem key={op} value={op}>
-                          {op === "Pago movil" ? "Pago móvil" : op}
+                    {paymentMethods
+                      .filter((method) => method.nombre !== formaPago)
+                      .map((method) => (
+                        <MenuItem key={method.id} value={method.nombre}>
+                          {method.nombre} · {method.divisa === "bs" ? "Bs" : "$"}
                         </MenuItem>
                       ))}
                   </Select>
                 </FormControl>
               </Box>
             )}
-            {agregarSegundaForma && segundaFormaPago === "Pago movil" && (
+            {agregarSegundaForma && paymentMethods.find((method) => method.nombre === segundaFormaPago)?.requiereReferencia && (
               <TextField
                 fullWidth
                 margin="normal"
                 label="Número de referencia (2da forma)"
                 value={referencia2}
                 onChange={(e) => setReferencia2(e.target.value)}
-                sx={{ fontSize: { xs: 12, sm: 16 } }}
               />
             )}
-            {agregarSegundaForma && segundaFormaPago === "Zelle" && (
+            {agregarSegundaForma && paymentMethods.find((method) => method.nombre === segundaFormaPago)?.requiereZelleInfo && (
               <TextField
                 fullWidth
                 margin="normal"
                 label="Número de confirmación o nombre del titular (2da forma)"
                 value={zelleInfo2}
                 onChange={(e) => setZelleInfo2(e.target.value)}
-                sx={{ fontSize: { xs: 12, sm: 16 } }}
               />
             )}
-          </>
+          </Paper>
         )}
-        <Button
-          variant="contained"
-          fullWidth
-          sx={{ mt: 2, fontSize: { xs: 12, sm: 16 }, py: { xs: 0.5, sm: 1 } }}
-          onClick={handleGuardar}
-        >
-          Guardar cambios
-        </Button>
-        <Button
-          variant="outlined"
-          fullWidth
-          sx={{ mt: 1, fontSize: { xs: 12, sm: 16 }, py: { xs: 0.5, sm: 1 } }}
-          color="secondary"
-          onClick={() => navigate("/dashboard")}
-        >
-          Cancelar
-        </Button>
+
+        <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 3 } }}>
+          <Typography variant="overline" color="text.secondary">
+            Confirmación
+          </Typography>
+          <Box
+            sx={{
+              mt: 2,
+              display: "flex",
+              flexDirection: { xs: "column", sm: "row" },
+              gap: 1,
+            }}
+          >
+            <Button
+              variant="contained"
+              fullWidth
+              onClick={handleGuardar}
+            >
+              Guardar cambios
+            </Button>
+            <Button
+              variant="outlined"
+              fullWidth
+              color="secondary"
+              onClick={() => navigate("/dashboard")}
+            >
+              Cancelar
+            </Button>
+          </Box>
+        </Paper>
       </Box>
     </Container>
   );

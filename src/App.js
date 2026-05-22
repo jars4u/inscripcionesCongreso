@@ -8,6 +8,7 @@ import RegisterParticipant from './pages/RegisterParticipant';
 import EditParticipant from './pages/EditParticipant';
 import ProtectedRoute from './ProtectedRoute';
 import AccesoDenegado from './pages/AccesoDenegado';
+import Configuration from './pages/Configuration';
 
 
 function App() {
@@ -39,6 +40,11 @@ function App() {
         <Route path="/editar/:id" element={
           <ProtectedRoute>
             <EditParticipant />
+          </ProtectedRoute>
+        } />
+        <Route path="/configuracion" element={
+          <ProtectedRoute>
+            <Configuration />
           </ProtectedRoute>
         } />
       </Routes>

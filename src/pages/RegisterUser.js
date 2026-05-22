@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { createSecondaryAuth, destroySecondaryApp } from '../firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase';
 import { Container, Typography, TextField, Button, Box, Alert } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -22,7 +24,18 @@ export default function RegisterUser() {
     const { secondaryApp, secondaryAuth } = createSecondaryAuth();
 
     try {
-      await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      const createdUid = userCredential?.user?.uid;
+
+      // Registrar en colección 'usuarios' para permitir listarlos desde la UI
+      if (createdUid) {
+        await setDoc(doc(db, 'usuarios', createdUid), {
+          email,
+          createdBy: user?.uid || null,
+          createdAt: serverTimestamp(),
+        });
+      }
+
       setSuccess('Usuario creado exitosamente. Tu sesión como administrador se mantuvo activa.');
       setEmail('');
       setPassword('');
