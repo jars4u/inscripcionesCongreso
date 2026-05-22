@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase';
+import { createSecondaryAuth, destroySecondaryApp } from '../firebase';
 import { Container, Typography, TextField, Button, Box, Alert } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,23 +8,33 @@ import { useAuth } from '../contexts/AuthContext';
 export default function RegisterUser() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { user } = useAuth();
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
 
-  // Cambia este email por el ADMINISTRADOR que puede registrar usuarios
-  const adminEmail = ["jars4u2@gmail.com", "carlosurdaneta@gmail.com"];
-
   const register = async () => {
+    setError('');
+    setSuccess('');
+    setIsSubmitting(true);
+
+    const { secondaryApp, secondaryAuth } = createSecondaryAuth();
+
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      alert('Usuario creado exitosamente');
-      navigate('/dashboard');
+      await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      setSuccess('Usuario creado exitosamente. Tu sesión como administrador se mantuvo activa.');
+      setEmail('');
+      setPassword('');
     } catch (err) {
-      alert('Error al registrar usuario: ' + err.message);
+      setError('No se pudo registrar el usuario. Verifica el correo y la contraseña e intenta nuevamente.');
+    } finally {
+      await destroySecondaryApp(secondaryApp);
+      setIsSubmitting(false);
     }
   };
 
-  if (!user || !adminEmail.includes(user.email)) {
+  if (!user || !isAdmin) {
     return (
       <Container maxWidth="sm">
         <Box mt={10}>
@@ -38,12 +48,19 @@ export default function RegisterUser() {
     <Container maxWidth="sm">
       <Box mt={10}>
         <Typography variant="h4" gutterBottom>Registrar Nuevo Usuario</Typography>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
+        )}
+        {success && (
+          <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>
+        )}
         <TextField
           fullWidth
           label="Correo electrónico"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           margin="normal"
+          disabled={isSubmitting}
         />
         <TextField
           fullWidth
@@ -52,9 +69,16 @@ export default function RegisterUser() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           margin="normal"
+          disabled={isSubmitting}
         />
-        <Button variant="contained" fullWidth onClick={register} sx={{ mt: 2 }}>
-          Registrar Usuario
+        <Button
+          variant="contained"
+          fullWidth
+          onClick={register}
+          sx={{ mt: 2 }}
+          disabled={isSubmitting || !email || !password}
+        >
+          {isSubmitting ? 'Registrando...' : 'Registrar Usuario'}
         </Button>
         <Button
           variant="outlined"
@@ -62,6 +86,7 @@ export default function RegisterUser() {
           sx={{ mt: 1 }}
           color="secondary"
           onClick={() => navigate(-1)}
+          disabled={isSubmitting}
         >
           Volver atrás
         </Button>

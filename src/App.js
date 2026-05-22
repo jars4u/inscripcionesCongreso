@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import FinancialReport from './pages/FinancialReport';
 import { AuthProvider } from './contexts/AuthContext';
 import RegisterUser from './pages/RegisterUser';
 import RegisterParticipant from './pages/RegisterParticipant';
@@ -18,6 +19,11 @@ function App() {
         <Route path="/dashboard" element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/reporte-financiero" element={
+          <ProtectedRoute>
+            <FinancialReport />
           </ProtectedRoute>
         } />
         <Route path="/registrar-usuario" element={

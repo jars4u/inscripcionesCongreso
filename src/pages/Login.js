@@ -1,24 +1,51 @@
-import { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase';
-import { Button, TextField, Container, Typography, Box } from '@mui/material';
+import { useEffect, useState } from 'react';
+import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider } from '../firebase';
+import { Button, TextField, Container, Typography, Box, Divider } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [activeMethod, setActiveMethod] = useState('');
   const navigate = useNavigate();
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading && user) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [loading, navigate, user]);
 
   const login = async () => {
+    setActiveMethod('email');
     try {
       await signInWithEmailAndPassword(auth, email, password);
       setError('');
-      navigate('/dashboard');
     } catch (err) {
       setError('Correo o contraseña incorrectos');
+    } finally {
+      setActiveMethod('');
     }
   };
+
+  const loginWithGoogle = async () => {
+    setActiveMethod('google');
+    try {
+      await signInWithPopup(auth, googleProvider);
+      setError('');
+    } catch (err) {
+      if (err.code !== 'auth/popup-closed-by-user') {
+        setError('No se pudo iniciar sesión con Google. Intenta nuevamente.');
+      }
+    } finally {
+      setActiveMethod('');
+    }
+  };
+
+  const isSubmitting = activeMethod !== '';
 
   return (
     <Container maxWidth="sm">
@@ -49,6 +76,7 @@ export default function Login() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           margin="normal"
+          disabled={isSubmitting}
         />
         <TextField
           fullWidth
@@ -57,12 +85,28 @@ export default function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           margin="normal"
+          disabled={isSubmitting}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') login();
+            if (e.key === 'Enter' && !isSubmitting) login();
           }}
         />
-        <Button variant="contained" fullWidth onClick={login} sx={{ mt: 2 }}>
-          Entrar
+        <Button
+          variant="contained"
+          fullWidth
+          onClick={login}
+          sx={{ mt: 2 }}
+          disabled={isSubmitting || !email || !password}
+        >
+          {activeMethod === 'email' ? 'Ingresando...' : 'Entrar con correo'}
+        </Button>
+        <Divider sx={{ my: 3 }}>o</Divider>
+        <Button
+          variant="outlined"
+          fullWidth
+          onClick={loginWithGoogle}
+          disabled={isSubmitting}
+        >
+          {activeMethod === 'google' ? 'Conectando...' : 'Entrar con Google'}
         </Button>
       </Box>
     </Container>
