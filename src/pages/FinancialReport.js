@@ -18,11 +18,10 @@ import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import {
-  DEFAULT_APP_CONFIG,
-  getAppConfig,
   getEventCost,
   getParticipantPaymentStatus,
 } from "../utils/paymentConfig";
+import { useConfig } from "../contexts/ConfigContext";
 
 const surfaceSx = {
   backgroundColor: "#FFFFFF",
@@ -45,35 +44,14 @@ export default function FinancialReport() {
   const { isAdmin, loading: authLoading } = useAuth();
 
   const [data, setData] = useState([]);
-  const [config, setConfig] = useState(DEFAULT_APP_CONFIG);
+  const { config } = useConfig();
   const [loadingData, setLoadingData] = useState(true);
   const [dataError, setDataError] = useState("");
   const [tasaBCV, setTasaBCV] = useState(null);
   const [loadingTasa, setLoadingTasa] = useState(true);
   const [activeTab, setActiveTab] = useState("financiero");
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchConfig = async () => {
-      try {
-        const nextConfig = await getAppConfig();
-        if (!cancelled) {
-          setConfig(nextConfig);
-        }
-      } catch (_) {
-        if (!cancelled) {
-          setConfig(DEFAULT_APP_CONFIG);
-        }
-      }
-    };
-
-    fetchConfig();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Config provided by ConfigProvider
 
   useEffect(() => {
     if (authLoading || !isAdmin) {

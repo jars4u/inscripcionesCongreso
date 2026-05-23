@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
 
 export const DEFAULT_PAYMENT_METHODS = [
@@ -37,7 +37,8 @@ export const DEFAULT_APP_CONFIG = {
   },
 };
 
-const CONFIG_PATH = ["configuracion", "general"];
+const ADMIN_CONFIG_PATH = ["configuracion", "general"];
+const PUBLIC_CONFIG_PATH = ["configuracion", "public"];
 
 function normalizeMethod(method, index) {
   const nombre = String(method?.nombre || "").trim();
@@ -81,7 +82,7 @@ export function normalizeConfig(config) {
 
 export async function getAppConfig() {
   try {
-    const configRef = doc(db, ...CONFIG_PATH);
+    const configRef = doc(db, ...PUBLIC_CONFIG_PATH);
     const snapshot = await getDoc(configRef);
 
     if (!snapshot.exists()) {
@@ -98,8 +99,12 @@ export async function getAppConfig() {
 export async function saveAppConfig(config) {
   const normalized = normalizeConfig(config);
   try {
-    const configRef = doc(db, ...CONFIG_PATH);
-    await setDoc(configRef, normalized, { merge: true });
+    // Write to both admin and public paths. Admin path may be protected by rules;
+    // public path should be readable by regular users so UI updates for everyone.
+    const adminRef = doc(db, ...ADMIN_CONFIG_PATH);
+    const publicRef = doc(db, ...PUBLIC_CONFIG_PATH);
+    await setDoc(adminRef, normalized, { merge: true });
+    await setDoc(publicRef, normalized, { merge: true });
     return normalized;
   } catch (err) {
     console.error("saveAppConfig error:", err);
@@ -213,4 +218,30 @@ export function getParticipantPaymentStatus(participant, eventCostUsd) {
     key: "pagado",
     balanceUsd: 0,
   };
+}
+
+export function subscribeAppConfig(callback) {
+  try {
+    const configRef = doc(db, ...PUBLIC_CONFIG_PATH);
+    const unsubscribe = onSnapshot(
+      configRef,
+      (snap) => {
+        try {
+          const data = snap.exists() ? normalizeConfig(snap.data()) : normalizeConfig(DEFAULT_APP_CONFIG);
+          callback(null, data);
+        } catch (err) {
+          callback(err);
+        }
+      },
+      (err) => {
+        callback(err);
+      }
+    );
+
+    return unsubscribe;
+  } catch (err) {
+    // synchronous error
+    setTimeout(() => callback(err), 0);
+    return () => {};
+  }
 }

@@ -32,7 +32,10 @@ export default function Login() {
       await signInWithEmailAndPassword(auth, email, password);
       setError('');
     } catch (err) {
-      setError('Correo o contraseña incorrectos');
+      console.error('Login error (email):', err);
+      // Mostrar mensaje más informativo durante desarrollo
+      const msg = err?.code ? `${err.code}: ${err.message}` : 'Correo o contraseña incorrectos';
+      setError(msg);
     } finally {
       setActiveMethod('');
     }
@@ -44,8 +47,10 @@ export default function Login() {
       await signInWithPopup(auth, googleProvider);
       setError('');
     } catch (err) {
+      console.error('Login error (google):', err);
       if (err.code !== 'auth/popup-closed-by-user') {
-        setError('No se pudo iniciar sesión con Google. Intenta nuevamente.');
+        const msg = err?.code ? `${err.code}: ${err.message}` : 'No se pudo iniciar sesión con Google. Intenta nuevamente.';
+        setError(msg);
       }
     } finally {
       setActiveMethod('');

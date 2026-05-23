@@ -33,7 +33,8 @@ import { getDocs, collection, deleteDoc, doc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
-import { getAppConfig, getEventCost, getParticipantPaymentStatus } from "../utils/paymentConfig";
+import { getEventCost, getParticipantPaymentStatus } from "../utils/paymentConfig";
+import { useConfig } from "../contexts/ConfigContext";
 
 const surfaceSx = {
   backgroundColor: "#FFFFFF",
@@ -145,7 +146,7 @@ function getParticipantStatus(participant, costoCongreso) {
 export default function Dashboard() {
   const [data, setData] = useState([]);
   const [dataError, setDataError] = useState("");
-  const [config, setConfig] = useState(null);
+  const { config } = useConfig();
   const [filtro, setFiltro] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [sortColumn, setSortColumn] = useState("nombre");
@@ -179,28 +180,7 @@ export default function Dashboard() {
     cargarDatos();
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const cargarConfiguracion = async () => {
-      try {
-        const nextConfig = await getAppConfig();
-        if (!cancelled) {
-          setConfig(nextConfig);
-        }
-      } catch (_) {
-        if (!cancelled) {
-          setConfig(null);
-        }
-      }
-    };
-
-    cargarConfiguracion();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Config is provided by ConfigProvider via useConfig
 
   const eliminarParticipante = async (id) => {
     // Se ha eliminado window.confirm para compatibilidad

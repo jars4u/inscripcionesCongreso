@@ -9,31 +9,17 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import {
-  Alert,
-  Box,
-  Button,
-  Checkbox,
-  Container,
-  Divider,
-  Paper,
-  TextField,
-  Typography,
-  FormControlLabel,
-  Select,
-  MenuItem,
-  InputLabel,
-  FormControl,
-} from "@mui/material";
+import { Alert, Box, Container, Paper, Typography } from "@mui/material";
 import { db } from "../firebase";
 import {
-  DEFAULT_APP_CONFIG,
   buildPaymentLine,
   getActivePaymentMethods,
-  getAppConfig,
   getEventCost,
   summarizePayments,
 } from "../utils/paymentConfig";
+import { useConfig } from "../contexts/ConfigContext";
+import useParticipantForm from "../hooks/useParticipantForm";
+import ParticipantForm from "../components/ParticipantForm";
 
 const surfaceSx = {
   backgroundColor: "#FFFFFF",
@@ -43,29 +29,15 @@ const surfaceSx = {
 };
 
 export default function EditParticipant() {
-  const [config, setConfig] = useState(DEFAULT_APP_CONFIG);
-  const [pago, setPago] = useState(false);
+  const { config } = useConfig();
   const [exento, setExento] = useState(false);
-  const [miembro, setMiembro] = useState(false);
-  const [bautizado, setBautizado] = useState(false);
-  // Función para capitalizar cada palabra
-  const capitalizeWords = (str) =>
-    str.replace(
-      /\b\w+/g,
-      (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
-    );
+  const { participant, setParticipant, capitalizeWords, calcularEdad } = useParticipantForm();
   const { id } = useParams();
   const navigate = useNavigate();
   const paymentMethods = getActivePaymentMethods(config);
   const costoCongreso = getEventCost(config);
 
   const [loading, setLoading] = useState(true);
-  const [nombre, setNombre] = useState("");
-  const [apellido, setApellido] = useState("");
-  const [cedula, setCedula] = useState("");
-  const [telefono, setTelefono] = useState("");
-  const [fechaNacimiento, setFechaNacimiento] = useState("");
-  const [edad, setEdad] = useState("");
   const [montoPagado, setMontoPagado] = useState("");
   const [montoPagado2, setMontoPagado2] = useState("");
   const [historialPagos, setHistorialPagos] = useState([]);
@@ -78,49 +50,24 @@ export default function EditParticipant() {
   const [zelleInfo2, setZelleInfo2] = useState("");
   const [errores, setErrores] = useState({});
 
-  // Calcular edad automáticamente
-  const calcularEdad = (fecha) => {
-    if (!fecha) return "";
-    const hoy = new Date();
-    const nacimiento = new Date(fecha);
-    let edad = hoy.getFullYear() - nacimiento.getFullYear();
-    const m = hoy.getMonth() - nacimiento.getMonth();
-    if (m < 0 || (m === 0 && hoy.getDate() < nacimiento.getDate())) {
-      edad--;
-    }
-    return edad;
-  };
+  
 
-  const handleFechaNacimiento = (e) => {
-    setFechaNacimiento(e.target.value);
-    setEdad(calcularEdad(e.target.value));
-  };
-
-  // Validar cédula solo números
-  const handleCedula = (e) => {
-    const valor = e.target.value;
-    if (/^\d*$/.test(valor)) {
-      setCedula(valor);
-      setErrores((prev) => ({ ...prev, cedula: undefined }));
-    } else {
-      setErrores((prev) => ({ ...prev, cedula: "Solo números permitidos" }));
-    }
-  };
+  // Nota: validación de cédula gestionada por el formulario compartido
 
   // Validar campos obligatorios y cédula única
   const validarCampos = async () => {
     let nuevosErrores = {};
-    if (!nombre) nuevosErrores.nombre = "El nombre es obligatorio";
-    if (!apellido) nuevosErrores.apellido = "El apellido es obligatorio";
-    if (!cedula) nuevosErrores.cedula = "La cédula es obligatoria";
-    if (!telefono) nuevosErrores.telefono = "El teléfono es obligatorio";
+    if (!participant.nombres) nuevosErrores.nombre = "El nombre es obligatorio";
+    if (!participant.apellidos) nuevosErrores.apellido = "El apellido es obligatorio";
+    if (!participant.ci) nuevosErrores.cedula = "La cédula es obligatoria";
+    if (!participant.telefonoMovil) nuevosErrores.telefono = "El teléfono es obligatorio";
     // Validar cédula única (excepto el mismo participante)
     const q = query(
       collection(db, "participantes"),
-      where("cedula", "==", cedula)
+      where("ci", "==", participant.ci)
     );
     const snapshot = await getDocs(q);
-    if (!cedula) {
+    if (!participant.ci) {
       // ya validado arriba
     } else if (snapshot.docs.length > 0 && snapshot.docs[0].id !== id) {
       nuevosErrores.cedula = "Ya existe un participante con esa cédula";
@@ -132,31 +79,66 @@ export default function EditParticipant() {
   useEffect(() => {
     const cargarParticipante = async () => {
       try {
-        const nextConfig = await getAppConfig();
-        setConfig(nextConfig);
         const docRef = doc(db, "participantes", id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setNombre(data.nombre || "");
-          setApellido(data.apellido || "");
-          setCedula(data.cedula || "");
-          setTelefono(data.telefono || "");
-          setFechaNacimiento(data.fechaNacimiento || "");
-          setEdad(
-            data.edad ||
-              (data.fechaNacimiento ? calcularEdad(data.fechaNacimiento) : "")
-          );
-          setMiembro(!!data.miembro);
-          setBautizado(!!data.bautizado);
+          setParticipant({
+            nombres: data.nombres || data.nombre || "",
+            apellidos: data.apellidos || data.apellido || "",
+            ci: data.ci || data.cedula || "",
+            edad:
+              data.edad || (data.fechaNacimiento ? calcularEdad(data.fechaNacimiento) : 0),
+            telefonoMovil: data.telefonoMovil || data.telefono || "",
+            telefonoFijo: data.telefonoFijo || "",
+            email: data.email || "",
+            fechaNacimiento: data.fechaNacimiento || "",
+            estadoCivil: data.estadoCivil || "Soltero",
+            estadoCivilOtro: data.estadoCivilOtro || "",
+            numHijos: data.numHijos || 0,
+            profesion: data.profesion || "",
+            ocupacion: data.ocupacion || "",
+            viveConPadres: data.viveConPadres || false,
+            nombreRepresentante: data.nombreRepresentante || "",
+            telefonoRepresentante: data.telefonoRepresentante || "",
+            sirveMinisterio: data.sirveMinisterio || data.sirveMinisterio || "",
+            residencia: {
+              zona: data.residencia?.zona || data.zona || "",
+              municipio: data.residencia?.municipio || "",
+              parroquia: data.residencia?.parroquia || "",
+              sector: data.residencia?.sector || "",
+              calle: data.residencia?.calle || "",
+              avenida: data.residencia?.avenida || "",
+              urbanizacion: data.residencia?.urbanizacion || "",
+              barrio: data.residencia?.barrio || "",
+              nroCasa: data.residencia?.nroCasa || "",
+              puntoReferencia: data.residencia?.puntoReferencia || "",
+              edificio: data.residencia?.edificio || "",
+              piso: data.residencia?.piso || "",
+              apto: data.residencia?.apto || "",
+            },
+            iglesia: {
+              bautizado: data.iglesia?.bautizado || data.bautizado || false,
+              miembro: data.iglesia?.miembro || data.miembro || false,
+              afiliacion: data.iglesia?.afiliacion || "",
+              bautismo: data.iglesia?.bautismo || "",
+              visitante: data.iglesia?.visitante || "",
+              cuantoTiempo: data.iglesia?.cuantoTiempo || "",
+            },
+            campamento: data.campamento || {
+              medicamentoDependiente: { respuesta: false, detalle: "" },
+              alergicoAlimento: { respuesta: false, detalle: "" },
+              alergicoMedicamento: { respuesta: false, detalle: "" },
+              enfermedad: { respuesta: false, detalle: "" },
+              actividadFisica: { respuesta: false, detalle: "" },
+            },
+          });
+          // miembro/bautizado están dentro de participant.iglesia
           setExento(!!data.exento);
-          setPago(!!data.pago);
-          // Si es pagado antiguo, mostrar 8 en el input
-          if (
-            data.pago &&
-            (!data.montoPagado || parseFloat(data.montoPagado) === 0)
-          ) {
-            setMontoPagado(String(getEventCost(nextConfig)));
+          // pago state removed; mantenemos pago dentro del documento actualizado
+          // Si es pagado antiguo, mostrar costo en el input
+          if (data.pago && (!data.montoPagado || parseFloat(data.montoPagado) === 0)) {
+            setMontoPagado(String(getEventCost(config)));
           } else {
             setMontoPagado(
               data.montoOriginalPago !== undefined
@@ -182,7 +164,6 @@ export default function EditParticipant() {
           setReferencia2(data.referencia2 || "");
           setZelleInfo2(data.zelleInfo2 || "");
         } else {
-          // alert("Participante no encontrado");
           navigate("/dashboard");
         }
       } catch (error) {
@@ -193,7 +174,8 @@ export default function EditParticipant() {
     };
 
     cargarParticipante();
-  }, [id, navigate]);
+    return () => {};
+  }, [id, navigate, config, calcularEdad, setParticipant]);
 
   const handleGuardar = async () => {
     if (!(await validarCampos())) {
@@ -267,14 +249,9 @@ export default function EditParticipant() {
       // Leer el participante actual para comparar montoPagado
       const docSnap = await getDoc(docRef);
           let updateData = {
-            nombre,
-            apellido,
-            cedula,
-            telefono,
-            fechaNacimiento,
-            edad,
-            miembro,
-            bautizado,
+            ...participant,
+            miembro: !!participant.iglesia?.miembro,
+            bautizado: !!participant.iglesia?.bautizado,
             pago,
             montoPagado: exento ? 0 : montoTotal,
             excedente: exento ? 0 : excedente,
@@ -417,289 +394,39 @@ export default function EditParticipant() {
           </Alert>
         )}
 
-        <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 3 } }}>
-          <Typography variant="overline" color="text.secondary">
-            Datos personales
-          </Typography>
-          <Box
-            sx={{
-              mt: 2,
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
-              gap: { xs: 1.5, md: 2 },
-            }}
-          >
-          <TextField
-            fullWidth
-            label="Nombre"
-            value={nombre}
-            onChange={(e) => setNombre(capitalizeWords(e.target.value))}
-            margin="normal"
-            error={!!errores.nombre}
-            helperText={errores.nombre}
-          />
-          <TextField
-            fullWidth
-            label="Apellido"
-            value={apellido}
-            onChange={(e) => setApellido(capitalizeWords(e.target.value))}
-            margin="normal"
-            error={!!errores.apellido}
-            helperText={errores.apellido}
-          />
-        </Box>
-        <Box
-          sx={{
-            mt: 0,
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
-            gap: { xs: 1.5, md: 2 },
-          }}
-        >
-          <TextField
-            fullWidth
-            label="Cédula"
-            value={cedula}
-            onChange={handleCedula}
-            margin="normal"
-            error={!!errores.cedula}
-            helperText={errores.cedula}
-          />
-          <TextField
-            fullWidth
-            label="Teléfono"
-            value={telefono}
-            onChange={(e) => setTelefono(e.target.value)}
-            margin="normal"
-            error={!!errores.telefono}
-            helperText={errores.telefono}
-          />
-        </Box>
-        <Box
-          sx={{
-            mt: 1,
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 180px" },
-            gap: { xs: 1.5, md: 2 },
-            alignItems: "center",
-          }}
-        >
-          <TextField
-            type="date"
-            label="Fecha de nacimiento"
-            InputLabelProps={{ shrink: true }}
-            value={fechaNacimiento}
-            onChange={handleFechaNacimiento}
-            margin="normal"
-          />
-          <Paper sx={{ ...surfaceSx, p: 2, backgroundColor: "#F7F3E8" }}>
-            <Typography variant="caption" color="text.secondary">
-              Edad calculada
-            </Typography>
-            <Typography variant="h6" sx={{ mt: 0.5 }}>
-              {edad ? edad : "-"}
-            </Typography>
-          </Paper>
-        </Box>
-
-        <Divider sx={{ my: { xs: 2, md: 2.5 } }} />
-
-        <Box display="flex" flexWrap="wrap" gap={1}>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={miembro}
-                onChange={(e) => setMiembro(e.target.checked)}
-              />
-            }
-            label="Miembro"
-            sx={{ ...surfaceSx, m: 0, px: 1.5, py: 0.5 }}
-          />
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={bautizado}
-                onChange={(e) => setBautizado(e.target.checked)}
-              />
-            }
-            label="Bautizado"
-            sx={{ ...surfaceSx, m: 0, px: 1.5, py: 0.5 }}
-          />
-          {(!pago || (parseFloat(montoPagado) || 0) < costoCongreso) && (
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={exento}
-                  onChange={(e) => setExento(e.target.checked)}
-                  color="primary"
-                />
-              }
-              label="Exento"
-              sx={{ ...surfaceSx, m: 0, px: 1.5, py: 0.5 }}
-            />
-          )}
-        </Box>
-        </Paper>
-
-        {!exento && (
-          <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 3 } }}>
-            <Typography variant="overline" color="text.secondary">
-              Pago
-            </Typography>
-            <Box
-              sx={{
-                mt: 2,
-                display: "grid",
-                gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
-                gap: { xs: 1.5, md: 2 },
-                alignItems: "start",
-              }}
-            >
-              <TextField
-                fullWidth
-                type="number"
-                label={`Monto pagado (${formaPago ? paymentMethods.find((method) => method.nombre === formaPago)?.divisa || "$" : "$"})`}
-                value={montoPagado}
-                onChange={(e) =>
-                  setMontoPagado(e.target.value.replace(/[^0-9.]/g, ""))
-                }
-                margin="normal"
-                inputProps={{ min: 0, step: "0.01" }}
-              />
-              <FormControl fullWidth margin="normal">
-                <InputLabel id="forma-pago-label">Forma de pago</InputLabel>
-                <Select
-                  labelId="forma-pago-label"
-                  value={formaPago}
-                  label="Forma de pago"
-                  onChange={(e) => setFormaPago(e.target.value)}
-                >
-                  {paymentMethods.map((method) => (
-                    <MenuItem key={method.id} value={method.nombre}>
-                      {method.nombre} · {method.divisa === "bs" ? "Bs" : "$"}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-            {paymentMethods.find((method) => method.nombre === formaPago)?.requiereReferencia && (
-              <TextField
-                fullWidth
-                margin="normal"
-                label="Número de referencia"
-                value={referencia}
-                onChange={(e) => setReferencia(e.target.value)}
-              />
-            )}
-            {paymentMethods.find((method) => method.nombre === formaPago)?.requiereZelleInfo && (
-              <TextField
-                fullWidth
-                margin="normal"
-                label="Número de confirmación o nombre del titular"
-                value={zelleInfo}
-                onChange={(e) => setZelleInfo(e.target.value)}
-              />
-            )}
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={agregarSegundaForma}
-                  onChange={(e) => setAgregarSegundaForma(e.target.checked)}
-                />
-              }
-              label="Segunda forma de pago"
-              sx={{ ...surfaceSx, mt: 2, mx: 0, px: 1.5, py: 0.5 }}
-            />
-            {agregarSegundaForma && (
-              <Box
-                sx={{
-                  mt: 1,
-                  display: "grid",
-                  gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
-                  gap: { xs: 1.5, md: 2 },
-                  alignItems: "start",
-                }}
-              >
-                <TextField
-                  fullWidth
-                  type="number"
-                  label={`Monto pagado 2do abono (${segundaFormaPago ? paymentMethods.find((method) => method.nombre === segundaFormaPago)?.divisa || "$" : "$"})`}
-                  value={montoPagado2}
-                  onChange={(e) =>
-                    setMontoPagado2(e.target.value.replace(/[^0-9.]/g, ""))
-                  }
-                  margin="normal"
-                  inputProps={{ min: 0, step: "0.01" }}
-                />
-                <FormControl fullWidth margin="normal">
-                  <InputLabel id="segunda-forma-pago-label">Segunda forma de pago</InputLabel>
-                  <Select
-                    labelId="segunda-forma-pago-label"
-                    value={segundaFormaPago}
-                    label="Segunda forma de pago"
-                    onChange={(e) => setSegundaFormaPago(e.target.value)}
-                  >
-                    {paymentMethods
-                      .filter((method) => method.nombre !== formaPago)
-                      .map((method) => (
-                        <MenuItem key={method.id} value={method.nombre}>
-                          {method.nombre} · {method.divisa === "bs" ? "Bs" : "$"}
-                        </MenuItem>
-                      ))}
-                  </Select>
-                </FormControl>
-              </Box>
-            )}
-            {agregarSegundaForma && paymentMethods.find((method) => method.nombre === segundaFormaPago)?.requiereReferencia && (
-              <TextField
-                fullWidth
-                margin="normal"
-                label="Número de referencia (2da forma)"
-                value={referencia2}
-                onChange={(e) => setReferencia2(e.target.value)}
-              />
-            )}
-            {agregarSegundaForma && paymentMethods.find((method) => method.nombre === segundaFormaPago)?.requiereZelleInfo && (
-              <TextField
-                fullWidth
-                margin="normal"
-                label="Número de confirmación o nombre del titular (2da forma)"
-                value={zelleInfo2}
-                onChange={(e) => setZelleInfo2(e.target.value)}
-              />
-            )}
-          </Paper>
-        )}
-
-        <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 3 } }}>
-          <Typography variant="overline" color="text.secondary">
-            Confirmación
-          </Typography>
-          <Box
-            sx={{
-              mt: 2,
-              display: "flex",
-              flexDirection: { xs: "column", sm: "row" },
-              gap: 1,
-            }}
-          >
-            <Button
-              variant="contained"
-              fullWidth
-              onClick={handleGuardar}
-            >
-              Guardar cambios
-            </Button>
-            <Button
-              variant="outlined"
-              fullWidth
-              color="secondary"
-              onClick={() => navigate("/dashboard")}
-            >
-              Cancelar
-            </Button>
-          </Box>
-        </Paper>
+        <ParticipantForm
+          participant={participant}
+          setParticipant={setParticipant}
+          capitalizeWords={capitalizeWords}
+          validarCedula={() => { /* use existing validation flow in this page */ }}
+          errorCedula={null}
+          setErrorCedula={() => {}}
+          montoPagado={montoPagado}
+          setMontoPagado={setMontoPagado}
+          montoPagado2={montoPagado2}
+          setMontoPagado2={setMontoPagado2}
+          formaPago={formaPago}
+          setFormaPago={setFormaPago}
+          referencia={referencia}
+          setReferencia={setReferencia}
+          zelleInfo={zelleInfo}
+          setZelleInfo={setZelleInfo}
+          agregarSegundaForma={agregarSegundaForma}
+          setAgregarSegundaForma={setAgregarSegundaForma}
+          segundaFormaPago={segundaFormaPago}
+          setSegundaFormaPago={setSegundaFormaPago}
+          referencia2={referencia2}
+          setReferencia2={setReferencia2}
+          zelleInfo2={zelleInfo2}
+          setZelleInfo2={setZelleInfo2}
+          exento={exento}
+          setExento={setExento}
+          paymentMethods={paymentMethods}
+          costoCongreso={costoCongreso}
+          surfaceSx={surfaceSx}
+          submitLabel="Guardar cambios"
+          onSubmit={handleGuardar}
+        />
       </Box>
     </Container>
   );
