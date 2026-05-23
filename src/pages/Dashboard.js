@@ -226,10 +226,38 @@ export default function Dashboard() {
 
   const costoCongreso = getEventCost(config);
 
+  const getField = (p, col) => {
+    if (!p) return "";
+    switch (col) {
+      case "nombre":
+        return (p.nombres || p.nombre || "").toString();
+      case "apellido":
+        return (p.apellidos || p.apellido || "").toString();
+      case "cedula":
+        return (p.ci || p.cedula || "").toString();
+      case "telefono":
+        return (p.telefonoMovil || p.telefonoFijo || p.telefono || "").toString();
+      case "edad":
+        return (p.edad || p.edadActual || 0).toString();
+      case "formaPago":
+        return (p.formaPago || "").toString();
+      case "registradoPor":
+        return (p.registradoPor || p.registrado_por || p.registrado_por_email || "").toString();
+      default:
+        return (p[col] || "").toString();
+    }
+  };
+
+  const getDisplayName = (p) => {
+    const first = p.nombres || p.nombre || "";
+    const last = p.apellidos || p.apellido || "";
+    return `${first} ${last}`.trim();
+  };
+
   // Filtrar y ordenar datos
   const datosFiltrados = data
-    .filter((participant) => {
-      const fullText = `${participant.nombre || ""} ${participant.apellido || ""} ${participant.cedula || ""}`
+      .filter((participant) => {
+      const fullText = `${participant.nombres || participant.nombre || ""} ${participant.apellidos || participant.apellido || ""} ${participant.ci || participant.cedula || ""}`
         .toLowerCase()
         .includes(filtro.toLowerCase());
 
@@ -244,18 +272,15 @@ export default function Dashboard() {
       return getParticipantStatus(participant, costoCongreso).key === statusFilter;
     })
     .sort((a, b) => {
-      let valA = a[sortColumn];
-      let valB = b[sortColumn];
-      if (
-        ["edad", "cedula", "telefono", "pagados", "pendientes"].includes(
-          sortColumn
-        )
-      ) {
-        valA = Number(valA) || 0;
-        valB = Number(valB) || 0;
+      let rawA = getField(a, sortColumn);
+      let rawB = getField(b, sortColumn);
+      let valA, valB;
+      if (["edad", "cedula", "telefono", "pagados", "pendientes"].includes(sortColumn)) {
+        valA = Number(rawA) || 0;
+        valB = Number(rawB) || 0;
       } else {
-        valA = (valA || "").toString().toLowerCase();
-        valB = (valB || "").toString().toLowerCase();
+        valA = (rawA || "").toString().toLowerCase();
+        valB = (rawB || "").toString().toLowerCase();
       }
       if (valA < valB) return sortDirection === "asc" ? -1 : 1;
       if (valA > valB) return sortDirection === "asc" ? 1 : -1;
@@ -336,14 +361,14 @@ export default function Dashboard() {
       }}
     >
       <IconButton
-        aria-label={`Editar participante ${participant.nombre}`}
+        aria-label={`Editar participante ${getDisplayName(participant)}`}
         onClick={() => navigate(`/editar/${participant.id}`)}
         sx={compactIconButtonSx}
       >
         <EditIcon fontSize="small" />
       </IconButton>
       <IconButton
-        aria-label={`Eliminar participante ${participant.nombre}`}
+        aria-label={`Eliminar participante ${getDisplayName(participant)}`}
         color="error"
         onClick={() => eliminarParticipante(participant.id)}
         sx={{ ...compactIconButtonSx, borderColor: "currentColor" }}
@@ -715,13 +740,13 @@ export default function Dashboard() {
                     <Box display="flex" justifyContent="space-between" gap={1.5}>
                       <Box sx={{ minWidth: 0 }}>
                         <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                          {participant.nombre} {participant.apellido}
+                          {getDisplayName(participant)}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
-                          Cédula: {participant.cedula || "Sin cédula"}
+                          Cédula: {participant.ci || participant.cedula || "Sin cédula"}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
-                          Teléfono: {participant.telefono || "-"}
+                          Teléfono: {participant.telefonoMovil || participant.telefonoFijo || participant.telefono || "-"}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
                           Registro: {participant.registradoPor || "-"}
@@ -773,14 +798,14 @@ export default function Dashboard() {
                     </Button>
                   </TableCell>
                   <TableCell>Estado</TableCell>
-                  <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                  {/* <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
                     <Button color="inherit" onClick={() => toggleSort("formaPago")}>
                       Pago
                     </Button>
-                  </TableCell>
+                  </TableCell> */}
                   <TableCell sx={{ display: { xs: "none", lg: "table-cell" } }}>
                     <Button color="inherit" onClick={() => toggleSort("registradoPor")}>
-                      Registro
+                      Registrado por
                     </Button>
                   </TableCell>
                   <TableCell align="right">Acciones</TableCell>
@@ -812,11 +837,6 @@ export default function Dashboard() {
                   datosFiltrados.map((p) => {
                     const status = getParticipantStatus(p, costoCongreso);
                     const paymentStatus = getParticipantPaymentStatus(p, costoCongreso);
-                    const paymentLabel = p.pago
-                      ? p.segundaFormaPago
-                        ? `${p.formaPago} / ${p.segundaFormaPago}`
-                        : p.formaPago
-                      : "-";
 
                     return (
                       <TableRow
@@ -832,7 +852,7 @@ export default function Dashboard() {
                       >
                         <TableCell sx={{ minWidth: { xs: 190, sm: 220 } }}>
                           <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                            {p.nombre} {p.apellido}
+                            {getDisplayName(p)}
                           </Typography>
                           <Box
                             sx={{
@@ -843,10 +863,10 @@ export default function Dashboard() {
                             }}
                           >
                             <Typography variant="caption" sx={{ display: { xs: "block", sm: "none" } }}>
-                              Cédula: {p.cedula || "Sin cédula"}
+                              Cédula: {p.ci || p.cedula || "Sin cédula"}
                             </Typography>
                             <Typography variant="caption" sx={{ display: { xs: "block", md: "none" } }}>
-                              Teléfono: {p.telefono || "-"}
+                              Teléfono: {p.telefonoMovil || p.telefonoFijo || p.telefono || "-"}
                             </Typography>
                             <Typography variant="caption" sx={{ display: { xs: "block", lg: "none" } }}>
                               Registro: {p.registradoPor || "-"}
@@ -854,10 +874,10 @@ export default function Dashboard() {
                           </Box>
                         </TableCell>
                         <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
-                          {p.cedula}
+                          {p.ci || p.cedula}
                         </TableCell>
                         <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
-                          {p.telefono}
+                          {p.telefonoMovil || p.telefonoFijo || p.telefono}
                         </TableCell>
                         <TableCell sx={{ display: { xs: "none", lg: "table-cell" } }}>
                           {p.edad || "-"}
@@ -877,14 +897,14 @@ export default function Dashboard() {
                             </Typography>
                           )}
                         </TableCell>
-                        <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                        {/* <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
                           <Typography variant="body2">{paymentLabel}</Typography>
                           {paymentStatus.isLegacyPaid && (
                             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
                               Legacy por conciliar
                             </Typography>
                           )}
-                        </TableCell>
+                        </TableCell> */}
                         <TableCell sx={{ display: { xs: "none", lg: "table-cell" } }}>
                           <Typography variant="body2">{p.registradoPor || "-"}</Typography>
                         </TableCell>

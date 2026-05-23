@@ -246,10 +246,26 @@ export default function EditParticipant() {
         excedente = montoTotal > costoCongreso ? montoTotal - costoCongreso : 0;
       }
       const docRef = doc(db, "participantes", id);
+      // Normalizar texto a mayúsculas antes de actualizar (excepto campos excluidos)
+      const EXCLUDE_UPPER = new Set(["email", "zelleInfo", "zelleInfo2", "referencia", "referencia2", "registradoPor"]);
+      const deepUppercase = (value) => {
+        if (value == null) return value;
+        if (Array.isArray(value)) return value.map((v) => deepUppercase(v));
+        if (typeof value === "object") {
+          const out = {};
+          Object.entries(value).forEach(([k, v]) => {
+            out[k] = EXCLUDE_UPPER.has(k) ? v : deepUppercase(v);
+          });
+          return out;
+        }
+        if (typeof value === "string") return value.toUpperCase();
+        return value;
+      };
+      const normalizedParticipant = deepUppercase(participant);
       // Leer el participante actual para comparar montoPagado
       const docSnap = await getDoc(docRef);
           let updateData = {
-            ...participant,
+            ...normalizedParticipant,
             miembro: !!participant.iglesia?.miembro,
             bautizado: !!participant.iglesia?.bautizado,
             pago,

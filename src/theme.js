@@ -32,7 +32,7 @@ const theme = createTheme({
     borderRadius: 0,
   },
   typography: {
-    fontFamily: '"Segoe UI", "Helvetica Neue", Arial, sans-serif',
+    fontFamily: '"Lexend", "Segoe UI", "Helvetica Neue", Arial, sans-serif',
     h3: {
       fontWeight: 700,
       letterSpacing: "-0.03em",

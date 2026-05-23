@@ -1,10 +1,23 @@
+:root{
+  --font-primary: 'Lexend', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-secondary: 'Lexend', system-ui, serif;
+  --fs-base: 16px;
+  --label-size: 14px;
+  --input-size: 16px;
+  --placeholder-color: #6B7280;
+  --text-color: #16302a;
+  --muted: #6B7280;
+  --focus-outline: rgba(59,130,246,0.3);
+}
+
 body {
   margin: 0;
-  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--font-primary);
+  font-size: var(--fs-base);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: #f3efe4;
-  color: #16302a;
+  color: var(--text-color);
 }
 
 code {
@@ -24,3 +37,30 @@ code {
   background: #ffbc00;
   color: #16302a;
 }
+
+/* Typography utilities */
+label{font-size: var(--label-size); font-weight:600; letter-spacing:0.2px; color:var(--text-color); display:block; margin-bottom:6px}
+
+input, textarea, select, .MuiInputBase-input {
+  font-family: var(--font-primary);
+  font-size: var(--input-size);
+  line-height:1.4;
+  font-weight:500;
+  color:var(--text-color);
+}
+
+::placeholder, .MuiInputBase-input::placeholder {
+  color: var(--placeholder-color);
+  opacity:1;
+  font-weight:400;
+}
+
+.input--uppercase { text-transform: uppercase; letter-spacing: 0.2px; }
+
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid var(--focus-outline);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.08);
+}
+
+.form-help { font-size: 13px; color: var(--muted); margin-top:6px }

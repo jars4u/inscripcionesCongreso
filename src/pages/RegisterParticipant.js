@@ -89,8 +89,27 @@ export default function RegisterParticipant() {
         excedente = montoTotal > costoCongreso ? montoTotal - costoCongreso : 0;
       }
       const nuevoPago = { fecha: new Date().toISOString(), monto: montoTotal, lineas: paymentLines, tasaBCV: tasaBCVActual };
+
+      // Normalizar texto a mayúsculas antes de guardar (excepto campos excluidos)
+      const EXCLUDE_UPPER = new Set(["email", "zelleInfo", "zelleInfo2", "referencia", "referencia2", "registradoPor"]);
+      const deepUppercase = (value) => {
+        if (value == null) return value;
+        if (Array.isArray(value)) return value.map((v) => deepUppercase(v));
+        if (typeof value === "object") {
+          const out = {};
+          Object.entries(value).forEach(([k, v]) => {
+            out[k] = EXCLUDE_UPPER.has(k) ? v : deepUppercase(v);
+          });
+          return out;
+        }
+        if (typeof value === "string") return value.toUpperCase();
+        return value;
+      };
+
+      const participantToSave = deepUppercase(p);
+
       await addDoc(collection(db, "participantes"), {
-        ...p,
+        ...participantToSave,
         pago,
         montoPagado: isExento ? 0 : montoTotal,
         excedente: isExento ? 0 : excedente,

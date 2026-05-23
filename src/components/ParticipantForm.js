@@ -39,26 +39,25 @@ export default function ParticipantForm({
   return (
     <>
       <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 3.5 } }}>
-        <Typography id="registro-title" variant="overline" sx={{ color: "primary.main", letterSpacing: "0.12em" }}>
+        <Typography id="registro-title" variant="overline" sx={{ color: "primary.main", letterSpacing: "0.12em", fontSize: 18, fontWeight: "bold" }}>
           Datos personales
         </Typography>
         <Box role="group" aria-labelledby="registro-title"
           sx={{
-            mt: 2,
             display: "grid",
             gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
             gap: { xs: 1.5, md: 2 },
           }}
         >
-          <TextField placeholder="Ej: Juan" inputProps={{ 'aria-label': 'Nombres' }} fullWidth label="Nombres" value={participant.nombres} onChange={e => setParticipant({ ...participant, nombres: capitalizeWords(e.target.value) })} margin="normal" required />
-          <TextField placeholder="Ej: Pérez" inputProps={{ 'aria-label': 'Apellidos' }} fullWidth label="Apellidos" value={participant.apellidos} onChange={e => setParticipant({ ...participant, apellidos: capitalizeWords(e.target.value) })} margin="normal" required />
+          <TextField placeholder="Ej: JUAN" inputProps={{ 'aria-label': 'Nombres', style: { textTransform: 'uppercase' } }} fullWidth label="Nombres" value={participant.nombres} onChange={e => setParticipant({ ...participant, nombres: e.target.value.toUpperCase() })} margin="normal" required />
+          <TextField placeholder="Ej: PÉREZ" inputProps={{ 'aria-label': 'Apellidos', style: { textTransform: 'uppercase' } }} fullWidth label="Apellidos" value={participant.apellidos} onChange={e => setParticipant({ ...participant, apellidos: e.target.value.toUpperCase() })} margin="normal" required />
           <TextField
             placeholder="Ej: V-12345678"
-            inputProps={{ 'aria-label': 'Cédula' }}
+            inputProps={{ 'aria-label': 'Cédula', style: { textTransform: 'uppercase' } }}
             fullWidth
             label="Cédula"
             value={participant.ci}
-            onChange={e => { setParticipant({ ...participant, ci: e.target.value }); setErrorCedula(""); }}
+            onChange={e => { setParticipant({ ...participant, ci: e.target.value.toUpperCase() }); setErrorCedula(""); }}
             onBlur={validarCedula}
             margin="normal"
             required
@@ -78,42 +77,41 @@ export default function ParticipantForm({
             <MenuItem value="Otro">Otro</MenuItem>
           </TextField>
           {participant.estadoCivil === "Otro" && (
-            <TextField placeholder="Especifique estado civil" fullWidth label="¿Cuál?" value={participant.estadoCivilOtro} onChange={e => setParticipant({ ...participant, estadoCivilOtro: e.target.value })} margin="normal" />
+            <TextField placeholder="ESPECIFIQUE ESTADO CIVIL" fullWidth label="¿Cuál?" value={participant.estadoCivilOtro} onChange={e => setParticipant({ ...participant, estadoCivilOtro: e.target.value.toUpperCase() })} margin="normal" inputProps={{ style: { textTransform: 'uppercase' } }} />
           )}
           <TextField placeholder="0" fullWidth label="Número de hijos" type="number" value={participant.numHijos} onChange={e => setParticipant({ ...participant, numHijos: e.target.value.replace(/[^0-9]/g, "") })} margin="normal" inputProps={{ 'aria-label': 'Número de hijos', min: 0 }} />
-          <TextField placeholder="Ej: Ingeniero" fullWidth label="Profesión" value={participant.profesion} onChange={e => setParticipant({ ...participant, profesion: capitalizeWords(e.target.value) })} margin="normal" inputProps={{ 'aria-label': 'Profesión' }} />
-          <TextField placeholder="Ej: Profesor" fullWidth label="Ocupación" value={participant.ocupacion} onChange={e => setParticipant({ ...participant, ocupacion: capitalizeWords(e.target.value) })} margin="normal" inputProps={{ 'aria-label': 'Ocupación' }} />
+          <TextField placeholder="Ej: INGENIERO" fullWidth label="Profesión" value={participant.profesion} onChange={e => setParticipant({ ...participant, profesion: e.target.value.toUpperCase() })} margin="normal" inputProps={{ 'aria-label': 'Profesión', style: { textTransform: 'uppercase' } }} />
+          <TextField placeholder="Ej: PROFESOR" fullWidth label="Ocupación" value={participant.ocupacion} onChange={e => setParticipant({ ...participant, ocupacion: e.target.value.toUpperCase() })} margin="normal" inputProps={{ 'aria-label': 'Ocupación', style: { textTransform: 'uppercase' } }} />
           <FormControlLabel control={<Checkbox inputProps={{ 'aria-label': 'Vive con sus padres' }} checked={participant.viveConPadres} onChange={e => setParticipant({ ...participant, viveConPadres: e.target.checked })} />} label="¿Vive con sus padres?" sx={{ m: 0, px: 1.5, py: 0.5 }} />
-          <TextField placeholder="Ej: María Pérez" fullWidth label="Nombre de un representante" value={participant.nombreRepresentante} onChange={e => setParticipant({ ...participant, nombreRepresentante: capitalizeWords(e.target.value) })} margin="normal" inputProps={{ 'aria-label': 'Nombre representante' }} />
+          <TextField placeholder="Ej: MARÍA PÉREZ" fullWidth label="Nombre de un representante" value={participant.nombreRepresentante} onChange={e => setParticipant({ ...participant, nombreRepresentante: e.target.value.toUpperCase() })} margin="normal" inputProps={{ 'aria-label': 'Nombre representante', style: { textTransform: 'uppercase' } }} />
           <TextField placeholder="Ej: 04141234567" fullWidth label="Teléfono móvil (representante)" value={participant.telefonoRepresentante} onChange={e => setParticipant({ ...participant, telefonoRepresentante: e.target.value })} margin="normal" inputProps={{ 'aria-label': 'Teléfono representante' }} />
-          <TextField placeholder="Ministerio / Servicio" fullWidth label="¿Sirve en algún ministerio?" value={participant.sirveMinisterio} onChange={e => setParticipant({ ...participant, sirveMinisterio: e.target.value })} margin="normal" inputProps={{ 'aria-label': 'Sirve ministerio' }} />
+          <TextField placeholder="MINISTERIO / SERVICIO" fullWidth label="¿Sirve en algún ministerio?" value={participant.sirveMinisterio} onChange={e => setParticipant({ ...participant, sirveMinisterio: e.target.value.toUpperCase() })} margin="normal" inputProps={{ 'aria-label': 'Sirve ministerio', style: { textTransform: 'uppercase' } }} />
         </Box>
       </Paper>
 
       <ParticipantResidenceCamp participant={participant} setParticipant={setParticipant} surfaceSx={surfaceSx} />
 
       <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 3 } }}>
-        <Typography id="iglesia-title" variant="overline" color="text.secondary">
+        <Typography id="iglesia-title" variant="overline" color="text.secondary" sx={{ fontSize: 18, fontWeight: "bold" }}>
           Datos de iglesia
         </Typography>
-        <Box role="group" aria-labelledby="iglesia-title" sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" }, gap: { xs: 1.5, md: 2 } }}>
+        <Box role="group" aria-labelledby="iglesia-title" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" }, gap: { xs: 1.5, md: 2 } }}>
           <FormControlLabel control={<Checkbox inputProps={{ 'aria-label': 'Bautizado' }} checked={participant.iglesia.bautizado} onChange={e => setParticipant({ ...participant, iglesia: { ...participant.iglesia, bautizado: e.target.checked } })} />} label="¿Está bautizado?" sx={{ m: 0, px: 1.5, py: 0.5 }} />
           <FormControlLabel control={<Checkbox inputProps={{ 'aria-label': 'Miembro' }} checked={participant.iglesia.miembro} onChange={e => setParticipant({ ...participant, iglesia: { ...participant.iglesia, miembro: e.target.checked } })} />} label="¿Es miembro?" sx={{ m: 0, px: 1.5, py: 0.5 }} />
-          <TextField placeholder="Nombre de la iglesia" fullWidth label="Afiliación / Iglesia local" value={participant.iglesia.afiliacion} onChange={e => setParticipant({ ...participant, iglesia: { ...participant.iglesia, afiliacion: e.target.value } })} margin="normal" inputProps={{ 'aria-label': 'Afiliación iglesia' }} />
-          <TextField placeholder="¿Dónde/fecha?" fullWidth label="Bautismo (detalle)" value={participant.iglesia.bautismo} onChange={e => setParticipant({ ...participant, iglesia: { ...participant.iglesia, bautismo: e.target.value } })} margin="normal" inputProps={{ 'aria-label': 'Bautismo detalle' }} />
-          <TextField placeholder="Sí / No / Observaciones" fullWidth label="Visitante (sí/no o detalle)" value={participant.iglesia.visitante} onChange={e => setParticipant({ ...participant, iglesia: { ...participant.iglesia, visitante: e.target.value } })} margin="normal" inputProps={{ 'aria-label': 'Visitante' }} />
-          <TextField placeholder="Ej: 2 años" fullWidth label="¿Cuánto tiempo?" value={participant.iglesia.cuantoTiempo} onChange={e => setParticipant({ ...participant, iglesia: { ...participant.iglesia, cuantoTiempo: e.target.value } })} margin="normal" inputProps={{ 'aria-label': 'Cuánto tiempo en la iglesia' }} />
+          <TextField placeholder="NOMBRE DE LA IGLESIA" fullWidth label="Afiliación / Iglesia local" value={participant.iglesia.afiliacion} onChange={e => setParticipant({ ...participant, iglesia: { ...participant.iglesia, afiliacion: e.target.value.toUpperCase() } })} margin="normal" inputProps={{ 'aria-label': 'Afiliación iglesia', style: { textTransform: 'uppercase' } }} />
+          <TextField placeholder="LUGAR / FECHA" fullWidth label="Bautismo (detalle)" value={participant.iglesia.bautismo} onChange={e => setParticipant({ ...participant, iglesia: { ...participant.iglesia, bautismo: e.target.value.toUpperCase() } })} margin="normal" inputProps={{ 'aria-label': 'Bautismo detalle', style: { textTransform: 'uppercase' } }} />
+          <TextField placeholder="SÍ / NO / OBSERVACIONES" fullWidth label="Visitante (sí/no o detalle)" value={participant.iglesia.visitante} onChange={e => setParticipant({ ...participant, iglesia: { ...participant.iglesia, visitante: e.target.value.toUpperCase() } })} margin="normal" inputProps={{ 'aria-label': 'Visitante', style: { textTransform: 'uppercase' } }} />
+          <TextField placeholder="Ej: 2 AÑOS" fullWidth label="¿Cuánto tiempo?" value={participant.iglesia.cuantoTiempo} onChange={e => setParticipant({ ...participant, iglesia: { ...participant.iglesia, cuantoTiempo: e.target.value.toUpperCase() } })} margin="normal" inputProps={{ 'aria-label': 'Cuánto tiempo en la iglesia', style: { textTransform: 'uppercase' } }} />
         </Box>
       </Paper>
 
       {!exento && (
         <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 3 } }}>
-          <Typography variant="overline" color="text.secondary">
+          <Typography variant="overline" color="text.secondary" sx={{ fontSize: 18, fontWeight: "bold" }}>
             Pago
           </Typography>
           <Box
             sx={{
-              mt: 2,
               display: "grid",
               gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
               gap: { xs: 1.5, md: 2 },
