@@ -357,8 +357,7 @@ export default function Dashboard() {
     ["registradoPor", "Registrado por"],
   ];
 
-  const activeSortLabel =
-    sortOptions.find(([value]) => value === sortColumn)?.[1] || "Nombre";
+  // Nota: se eliminó `activeSortLabel` porque causaba una advertencia de eslint en CI
 
   const renderParticipantActions = (participant) => (
     <Box
