@@ -231,7 +231,7 @@ export default function Configuration() {
 
   if (authLoading || loadingConfig) {
     return (
-      <Container maxWidth="md" sx={{ py: { xs: 2, md: 4 } }}>
+      <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
         <Paper sx={{ ...surfaceSx, p: 4, textAlign: "center" }}>
           <Typography variant="h6">Cargando configuración...</Typography>
         </Paper>
@@ -263,7 +263,7 @@ export default function Configuration() {
   }
 
   return (
-    <Container maxWidth="md" sx={{ py: { xs: 1.5, md: 4 } }}>
+    <Container maxWidth="lg" sx={{ py: { xs: 1.5, md: 4 } }}>
       <Box display="grid" gap={2}>
         <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 3.5 } }}>
           <Box
@@ -394,17 +394,19 @@ export default function Configuration() {
                     <Box
                       sx={{
                         display: "grid",
-                        gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 130px 140px" },
+                        gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 96px 96px minmax(0, 260px)", lg: "minmax(0, 1fr) 100px 96px minmax(0, 300px)" },
                         gap: 1,
                         alignItems: "center",
                       }}
                     >
                       <TextField
+                        fullWidth
                         label="Nombre"
                         value={method.nombre}
                         onChange={(event) => handleMethodChange(index, "nombre", event.target.value)}
                       />
                       <TextField
+                        fullWidth
                         select
                         label="Divisa"
                         value={method.divisa}
@@ -414,6 +416,7 @@ export default function Configuration() {
                         <MenuItem value="bs">Bs</MenuItem>
                       </TextField>
                       <TextField
+                        fullWidth
                         select
                         label="Estado"
                         value={method.activa ? "activa" : "inactiva"}
@@ -422,40 +425,33 @@ export default function Configuration() {
                         <MenuItem value="activa">Activa</MenuItem>
                         <MenuItem value="inactiva">Inactiva</MenuItem>
                       </TextField>
-                    </Box>
-                    <Box
-                      sx={{
-                        mt: 1.25,
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: 1,
-                        alignItems: "center",
-                      }}
-                    >
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={Boolean(method.requiereReferencia)}
-                            onChange={(event) =>
-                              handleMethodChange(index, "requiereReferencia", event.target.checked)
-                            }
-                          />
-                        }
-                        label="Requiere referencia"
-                        sx={{ ...surfaceSx, m: 0, px: 1, py: 0.25 }}
-                      />
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={Boolean(method.requiereZelleInfo)}
-                            onChange={(event) =>
-                              handleMethodChange(index, "requiereZelleInfo", event.target.checked)
-                            }
-                          />
-                        }
-                        label="Requiere confirmación"
-                        sx={{ ...surfaceSx, m: 0, px: 1, py: 0.25 }}
-                      />
+
+                      <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'nowrap', justifyContent: 'flex-start', width: '100%' }}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={Boolean(method.requiereReferencia)}
+                              onChange={(event) =>
+                                handleMethodChange(index, "requiereReferencia", event.target.checked)
+                              }
+                            />
+                          }
+                          label="Referencia"
+                          sx={{ ...surfaceSx, m: 0, px: 0.5, py: 0.25, fontSize: 12 }}
+                        />
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={Boolean(method.requiereZelleInfo)}
+                              onChange={(event) =>
+                                handleMethodChange(index, "requiereZelleInfo", event.target.checked)
+                              }
+                            />
+                          }
+                          label="Confirmación"
+                          sx={{ ...surfaceSx, m: 0, px: 0.5, py: 0.25, fontSize: 12 }}
+                        />
+                      </Box>
                     </Box>
                     <Box display="flex" alignItems="center" gap={1} mt={1.25}>
                       <TuneOutlinedIcon sx={{ fontSize: 18, color: "text.secondary" }} />
