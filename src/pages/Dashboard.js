@@ -28,6 +28,10 @@ import PersonAddAltOutlinedIcon from "@mui/icons-material/PersonAddAltOutlined";
 import ArrowOutwardIcon from "@mui/icons-material/ArrowOutward";
 import SwapVertIcon from "@mui/icons-material/SwapVert";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import PeopleOutlineIcon from '@mui/icons-material/PeopleOutline';
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import PendingActionsIcon from '@mui/icons-material/PendingActions';
+import LabelImportantIcon from '@mui/icons-material/LabelImportant';
 import { getAuth, signOut } from "firebase/auth";
 import { getDocs, collection, deleteDoc, doc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
@@ -304,6 +308,7 @@ export default function Dashboard() {
     {
       key: "todos",
       title: "Total registrados",
+      icon: <PeopleOutlineIcon fontSize="small" />,
       value: totalParticipantes,
       caption: "Base completa",
       backgroundColor: "#00492F",
@@ -313,6 +318,7 @@ export default function Dashboard() {
     {
       key: "pagado",
       title: "Pagados",
+      icon: <AttachMoneyIcon fontSize="small" />,
       value: pagados,
       caption: legacyPaidCount > 0 ? `Incluye ${legacyPaidCount} legacy` : "Pago completo o mayor",
       backgroundColor: "#046552",
@@ -322,6 +328,7 @@ export default function Dashboard() {
     {
       key: "pendiente",
       title: "Pendientes",
+      icon: <PendingActionsIcon fontSize="small" />,
       value: pendientes,
       caption: "Requieren seguimiento",
       backgroundColor: "#FFBC00",
@@ -331,6 +338,7 @@ export default function Dashboard() {
     {
       key: "exento",
       title: "Exentos",
+      icon: <LabelImportantIcon fontSize="small" />,
       value: exentos.length,
       caption: "Sin cobro requerido",
       backgroundColor: "#EEE8D8",
@@ -641,7 +649,7 @@ export default function Dashboard() {
                   display: "flex",
                   gap: 1,
                   flexWrap: "wrap",
-                  alignItems: "center",
+                  justifyContent: { xs: "space-between", sm: "flex-end" },
                 }}
               >
                 <TextField
@@ -675,7 +683,16 @@ export default function Dashboard() {
             </Box>
           </Box>
 
-          <Box display="flex" flexWrap="wrap" gap={1} alignItems="center">
+          <Box
+            display="flex"
+            gap={1}
+            justifyContent={{ xs: "space-between", sm: "flex-start" }}
+            sx={{
+              flexWrap: { xs: "nowrap", sm: "wrap" },
+              overflowX: { xs: "auto", sm: "visible" },
+              px: { xs: 1, sm: 0 },
+            }}
+          >
             {summaryCards.map((card) => {
               const isActive =
                 (statusFilter === "todos" && card.key === "todos") ||
@@ -684,6 +701,7 @@ export default function Dashboard() {
               return (
                 <Button
                   key={card.key}
+                  aria-label={card.title}
                   variant={isActive ? "contained" : "outlined"}
                   onClick={() => toggleStatusFilter(card.key)}
                   sx={{
@@ -694,15 +712,20 @@ export default function Dashboard() {
                       backgroundColor: isActive ? card.backgroundColor : "#EEE8D8",
                       borderColor: isActive ? card.borderColor : "#D8D1C2",
                     },
+                    // ensure buttons don't wrap their content on mobile
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  {card.title}
+                  <Box display="inline-flex" alignItems="center" gap={1}>
+                    {card.icon}
+                    <Typography component="span" sx={{ display: { xs: "none", sm: "inline" } }}>{card.title}</Typography>
+                  </Box>
                 </Button>
               );
             })}
-            <Typography variant="caption" color="text.secondary" sx={{ ml: { xs: 0, sm: 1 } }}>
+            {/* <Typography variant="caption" color="text.secondary" sx={{ ml: { xs: 0, sm: 1 } }}>
               Orden: {activeSortLabel} · {sortDirection === "asc" ? "asc" : "desc"}
-            </Typography>
+            </Typography> */}
           </Box>
 
           <Box sx={{ display: { xs: "grid", sm: "none" }, gap: 1 }}>

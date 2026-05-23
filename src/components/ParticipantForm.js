@@ -2,6 +2,15 @@ import React from "react";
 import { Box, Paper, Typography, TextField, MenuItem, Select, InputLabel, FormControl, Button, FormControlLabel, Checkbox } from "@mui/material";
 import ParticipantResidenceCamp from "./ParticipantResidenceCamp";
 
+const ESTADO_OPTIONS = ["Soltero(a)", "Casado(a)", "Viudo(a)", "Divorciado(a)", "Otro"];
+
+const normalizeOption = (val, options) => {
+  if (!val && val !== "") return "";
+  if (!val) return "";
+  const found = options.find((o) => String(o).toLowerCase() === String(val).toLowerCase());
+  return found || "";
+};
+
 export default function ParticipantForm({
   participant,
   setParticipant,
@@ -69,14 +78,21 @@ export default function ParticipantForm({
           <TextField placeholder="correo@ejemplo.com" inputProps={{ 'aria-label': 'Correo electrónico' }} fullWidth label="Correo electrónico" value={participant.email} onChange={e => setParticipant({ ...participant, email: e.target.value })} margin="normal" />
           <TextField placeholder="AAAA-MM-DD" fullWidth label="Fecha de nacimiento" type="date" value={participant.fechaNacimiento} onChange={(e) => { const fecha = e.target.value; const hoy = new Date(); const nacimiento = new Date(fecha); let edad = hoy.getFullYear() - nacimiento.getFullYear(); const m = hoy.getMonth() - nacimiento.getMonth(); if (m < 0 || (m === 0 && hoy.getDate() < nacimiento.getDate())) { edad--; } setParticipant({ ...participant, fechaNacimiento: fecha, edad }); }} margin="normal" InputLabelProps={{ shrink: true }} inputProps={{ 'aria-label': 'Fecha de nacimiento' }} required />
           <TextField placeholder="Edad calculada" fullWidth label="Edad" value={participant.edad} margin="normal" disabled inputProps={{ 'aria-label': 'Edad' }} />
-          <TextField placeholder="Seleccione estado civil" fullWidth label="Estado civil" value={participant.estadoCivil} onChange={e => setParticipant({ ...participant, estadoCivil: e.target.value })} margin="normal" select inputProps={{ 'aria-label': 'Estado civil' }}>
-            <MenuItem value="Soltero(a)">Soltero(a)</MenuItem>
-            <MenuItem value="Casado(a)">Casado(a)</MenuItem>
-            <MenuItem value="Viudo(a)">Viudo(a)</MenuItem>
-            <MenuItem value="Divorciado(a)">Divorciado(a)</MenuItem>
-            <MenuItem value="Otro">Otro</MenuItem>
+          <TextField
+            placeholder="Seleccione estado civil"
+            fullWidth
+            label="Estado civil"
+            value={normalizeOption(participant.estadoCivil, ESTADO_OPTIONS)}
+            onChange={e => setParticipant({ ...participant, estadoCivil: e.target.value })}
+            margin="normal"
+            select
+            inputProps={{ 'aria-label': 'Estado civil' }}
+          >
+            {ESTADO_OPTIONS.map((opt) => (
+              <MenuItem key={opt} value={opt}>{opt}</MenuItem>
+            ))}
           </TextField>
-          {participant.estadoCivil === "Otro" && (
+          {normalizeOption(participant.estadoCivil, ESTADO_OPTIONS) === "Otro" && (
             <TextField placeholder="ESPECIFIQUE ESTADO CIVIL" fullWidth label="¿Cuál?" value={participant.estadoCivilOtro} onChange={e => setParticipant({ ...participant, estadoCivilOtro: e.target.value.toUpperCase() })} margin="normal" inputProps={{ style: { textTransform: 'uppercase' } }} />
           )}
           <TextField placeholder="0" fullWidth label="Número de hijos" type="number" value={participant.numHijos} onChange={e => setParticipant({ ...participant, numHijos: e.target.value.replace(/[^0-9]/g, "") })} margin="normal" inputProps={{ 'aria-label': 'Número de hijos', min: 0 }} />

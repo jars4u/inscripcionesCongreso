@@ -484,7 +484,6 @@ export default function Configuration() {
               <SettingsSuggestOutlinedIcon fontSize="small" />
             </Box>
             <Box>
-              <Typography variant="overline" color="text.secondary">Usuarios</Typography>
               <Typography variant="h5">Gestión de usuarios</Typography>
             </Box>
           </Box>

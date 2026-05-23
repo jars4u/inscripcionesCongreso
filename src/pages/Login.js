@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
-import { Button, TextField, Container, Typography, Box, Divider, Paper, Alert } from '@mui/material';
+import { Button, TextField, Container, Typography, Box, Divider, Paper, Alert, InputAdornment, IconButton } from '@mui/material';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -15,6 +17,7 @@ const surfaceSx = {
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [activeMethod, setActiveMethod] = useState('');
   const navigate = useNavigate();
@@ -180,13 +183,27 @@ export default function Login() {
             <TextField
               fullWidth
               label="Contraseña"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               margin="normal"
               disabled={isSubmitting}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !isSubmitting) login();
+              }}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                      onClick={() => setShowPassword((s) => !s)}
+                      edge="end"
+                      size="large"
+                    >
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
               }}
             />
           </Box>

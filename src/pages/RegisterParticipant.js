@@ -134,7 +134,8 @@ export default function RegisterParticipant() {
       });
       navigate("/dashboard");
     } catch (error) {
-      setErrorCampos("Error al registrar participante.");
+      console.error('RegisterParticipant error:', error);
+      setErrorCampos(error?.message || "Error al registrar participante.");
     }
   };
 

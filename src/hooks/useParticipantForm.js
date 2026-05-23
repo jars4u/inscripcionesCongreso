@@ -9,7 +9,7 @@ const initialParticipantTemplate = {
   telefonoFijo: "",
   email: "",
   fechaNacimiento: "",
-  estadoCivil: "Soltero",
+  estadoCivil: "Soltero(a)",
   estadoCivilOtro: "",
   numHijos: 0,
   profesion: "",
