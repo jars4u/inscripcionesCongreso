@@ -1,8 +1,10 @@
 import React from "react";
-import { Box, Paper, Typography, TextField, MenuItem, Select, InputLabel, FormControl, Button, FormControlLabel, Checkbox } from "@mui/material";
+import { Box, Paper, Typography, TextField, MenuItem, Button, FormControlLabel, Checkbox, CircularProgress, Radio } from "@mui/material";
+import PaymentsList from "./PaymentsList";
 import ParticipantResidenceCamp from "./ParticipantResidenceCamp";
 
 const ESTADO_OPTIONS = ["Soltero(a)", "Casado(a)", "Viudo(a)", "Divorciado(a)", "Otro"];
+const TIPO_REGISTRO_OPTIONS = ["Participante", "Menor de edad", "Visitante", "Otra iglesia", "Servidor"];
 
 const normalizeOption = (val, options) => {
   if (!val && val !== "") return "";
@@ -44,9 +46,30 @@ export default function ParticipantForm({
   surfaceSx,
   submitLabel = "Registrar",
   onSubmit,
+  submitting = false,
+  // pagos helpers
+  pagos = [],
+  addPayment,
+  updatePayment,
+  removePayment,
 }) {
   return (
     <>
+      <Paper sx={{ ...surfaceSx, p: { xs: 1, md: 2 } }}>
+        <Typography id="tipo-title" variant="overline" sx={{ color: "text.secondary", fontSize: 12, fontWeight: "bold" }}>
+          Tipo de registro
+        </Typography>
+        <Box role="group" aria-labelledby="tipo-title" sx={{ mt: 1, display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(3, 1fr)", md: "repeat(5, 1fr)" }, gap: 1 }}>
+          {TIPO_REGISTRO_OPTIONS.map((opt) => (
+            <FormControlLabel
+              key={opt}
+              control={<Radio size="small" checked={participant.tipoRegistro === opt} onChange={() => setParticipant({ ...participant, tipoRegistro: opt })} />}
+              label={opt}
+              sx={{ m: 0, py: 0.5 }}
+            />
+          ))}
+        </Box>
+      </Paper>
       <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 3.5 } }}>
         <Typography id="registro-title" variant="overline" sx={{ color: "primary.main", letterSpacing: "0.12em", fontSize: 18, fontWeight: "bold" }}>
           Datos personales
@@ -122,148 +145,14 @@ export default function ParticipantForm({
       </Paper>
 
       {!exento && (
-        <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 3 } }}>
-          <Typography variant="overline" color="text.secondary" sx={{ fontSize: 18, fontWeight: "bold" }}>
-            Pago
-          </Typography>
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
-              gap: { xs: 1.5, md: 2 },
-              alignItems: "start",
-            }}
-          >
-            <TextField
-              placeholder="0.00"
-              fullWidth
-              type="number"
-              label={`Monto pagado (${formaPago ? paymentMethods.find((method) => method.nombre === formaPago)?.divisa || "$" : "$"})`}
-              value={montoPagado}
-              onChange={(e) =>
-                setMontoPagado(e.target.value.replace(/[^0-9.]/g, ""))
-              }
-              margin="normal"
-              inputProps={{ min: 0, step: "0.01", 'aria-label': 'Monto pagado' }}
-            />
-            <FormControl fullWidth margin="normal">
-              <InputLabel id="forma-pago-label">Forma de pago</InputLabel>
-              <Select
-                labelId="forma-pago-label"
-                value={formaPago}
-                label="Forma de pago"
-                onChange={(e) => setFormaPago(e.target.value)}
-              >
-                {paymentMethods.map((method) => (
-                  <MenuItem key={method.id} value={method.nombre}>
-                    {method.nombre} · {method.divisa === "bs" ? "Bs" : "$"}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
-          {paymentMethods.find((method) => method.nombre === formaPago)?.requiereReferencia && (
-            <TextField
-              placeholder="Ej: 123456"
-              fullWidth
-              margin="normal"
-              label="Número de referencia"
-              value={referencia}
-              onChange={(e) => setReferencia(e.target.value)}
-              inputProps={{ 'aria-label': 'Número de referencia' }}
-            />
-          )}
-          {paymentMethods.find((method) => method.nombre === formaPago)?.requiereZelleInfo && (
-            <TextField
-              placeholder="Titular o confirmación"
-              fullWidth
-              margin="normal"
-              label="Número de confirmación o nombre del titular"
-              value={zelleInfo}
-              onChange={(e) => setZelleInfo(e.target.value)}
-              inputProps={{ 'aria-label': 'Zelle o confirmación' }}
-            />
-          )}
-
-          <FormControlLabel
-            control={<Checkbox inputProps={{ 'aria-label': 'Exento' }} checked={exento} onChange={(e) => setExento(e.target.checked)} />}
-            label="Exento (no paga)"
-            sx={{ m: 0, px: 1.5, py: 0.5 }}
-          />
-
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={agregarSegundaForma}
-                onChange={(e) => setAgregarSegundaForma(e.target.checked)}
-              />
-            }
-            label="Agregar segunda forma de pago"
-            sx={{ ...surfaceSx, mt: 2, mx: 0, px: 1.5, py: 0.5 }}
-          />
-
-          {agregarSegundaForma && (
-            <Box
-              sx={{
-                mt: 1,
-                display: "grid",
-                gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
-                gap: { xs: 1.5, md: 2 },
-                alignItems: "start",
-              }}
-            >
-              <TextField
-                placeholder="0.00"
-                fullWidth
-                type="number"
-                label={`Monto pagado 2do abono (${segundaFormaPago ? paymentMethods.find((method) => method.nombre === segundaFormaPago)?.divisa || "$" : "$"})`}
-                value={montoPagado2}
-                onChange={(e) =>
-                  setMontoPagado2(e.target.value.replace(/[^0-9.]/g, ""))
-                }
-                margin="normal"
-                inputProps={{ min: 0, step: "0.01" }}
-              />
-              <FormControl fullWidth margin="normal">
-                <InputLabel id="segunda-forma-pago-label">Segunda forma de pago</InputLabel>
-                <Select
-                  labelId="segunda-forma-pago-label"
-                  value={segundaFormaPago}
-                  label="Segunda forma de pago"
-                  onChange={(e) => setSegundaFormaPago(e.target.value)}
-                >
-                  {paymentMethods
-                    .filter((method) => method.nombre !== formaPago)
-                    .map((method) => (
-                      <MenuItem key={method.id} value={method.nombre}>
-                        {method.nombre} · {method.divisa === "bs" ? "Bs" : "$"}
-                      </MenuItem>
-                    ))}
-                </Select>
-              </FormControl>
-            </Box>
-          )}
-          {agregarSegundaForma && paymentMethods.find((method) => method.nombre === segundaFormaPago)?.requiereReferencia && (
-            <TextField
-              placeholder="Ej: 123456"
-              fullWidth
-              margin="normal"
-              label="Número de referencia (2da forma)"
-              value={referencia2}
-              onChange={(e) => setReferencia2(e.target.value)}
-            />
-          )}
-          {agregarSegundaForma && paymentMethods.find((method) => method.nombre === segundaFormaPago)?.requiereZelleInfo && (
-            <TextField
-              placeholder="Titular o confirmación"
-              fullWidth
-              margin="normal"
-              label="Número de confirmación o nombre del titular (2da forma)"
-              value={zelleInfo2}
-              onChange={(e) => setZelleInfo2(e.target.value)}
-            />
-          )}
-        </Paper>
+        <PaymentsList
+          pagos={pagos}
+          paymentMethods={paymentMethods}
+          addPayment={addPayment}
+          updatePayment={updatePayment}
+          removePayment={removePayment}
+          disabled={submitting}
+        />
       )}
 
       <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 3 } }}>
@@ -281,15 +170,20 @@ export default function ParticipantForm({
           <Button
             variant="contained"
             fullWidth
-            onClick={() => onSubmit && onSubmit({ participant, montoPagado, montoPagado2, formaPago, referencia, zelleInfo, agregarSegundaForma, segundaFormaPago, referencia2, zelleInfo2, exento })}
+            disabled={submitting}
+            onClick={() => {
+              if (submitting) return;
+              onSubmit && onSubmit({ participant, pagos, exento });
+            }}
           >
+            {submitting && <CircularProgress color="inherit" size={18} sx={{ mr: 1 }} />}
             {submitLabel}
           </Button>
           <Button
             variant="outlined"
             fullWidth
             color="secondary"
-            onClick={() => window.history.back()}
+            onClick={() => { if (!submitting) window.history.back(); }}
           >
             Cancelar
           </Button>

@@ -18,6 +18,7 @@ const initialParticipantTemplate = {
   nombreRepresentante: "",
   telefonoRepresentante: "",
   sirveMinisterio: "",
+  tipoRegistro: "Participante",
   residencia: {
     zona: "",
     municipio: "",
@@ -53,6 +54,51 @@ const initialParticipantTemplate = {
 export default function useParticipantForm(initial = null) {
   const [participant, setParticipant] = useState(initial || initialParticipantTemplate);
   const [errorCedula, setErrorCedula] = useState("");
+  const [pagos, setPagos] = useState([]);
+
+  const normalizePaymentsFromDoc = (data) => {
+    // If doc already has pagosDetalle, use it
+    if (Array.isArray(data.pagosDetalle) && data.pagosDetalle.length > 0) {
+      return data.pagosDetalle.map((line, idx) => ({ id: line.id || `${Date.now()}-${idx}`, ...line }));
+    }
+    // Fallback: map legacy fields (montoPagado, montoPagado2, formaPago, segundaFormaPago, referencia, referencia2, zelleInfo, zelleInfo2)
+    const lines = [];
+    if (data.montoOriginalPago || data.montoPagado) {
+      lines.push({
+        id: `legacy-1`,
+        amountOriginal: data.montoOriginalPago ?? data.montoPagado ?? 0,
+        currency: data.monedaPago || (data.formaPago ? (data.formaPago.toLowerCase().includes('bs') ? 'bs' : 'usd') : 'usd'),
+        methodName: data.formaPago || '',
+        reference: data.referencia || '',
+        zelleInfo: data.zelleInfo || '',
+      });
+    }
+    if (data.montoOriginalPago2 || data.montoPagado2) {
+      lines.push({
+        id: `legacy-2`,
+        amountOriginal: data.montoOriginalPago2 ?? data.montoPagado2 ?? 0,
+        currency: data.monedaPago2 || (data.segundaFormaPago ? (data.segundaFormaPago.toLowerCase().includes('bs') ? 'bs' : 'usd') : 'usd'),
+        methodName: data.segundaFormaPago || '',
+        reference: data.referencia2 || '',
+        zelleInfo: data.zelleInfo2 || '',
+      });
+    }
+    return lines.map((l, idx) => ({ id: l.id || `${Date.now()}-${idx}`, ...l }));
+  };
+
+  const addPayment = (payment) => {
+    const newLine = { id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`, ...payment };
+    setPagos((p) => [...p, newLine]);
+    return newLine.id;
+  };
+
+  const updatePayment = (id, patch) => {
+    setPagos((p) => p.map((line) => (line.id === id ? { ...line, ...patch } : line)));
+  };
+
+  const removePayment = (id) => {
+    setPagos((p) => p.filter((line) => line.id !== id));
+  };
 
   const capitalizeWords = (str = "") =>
     String(str).replace(/\b\w+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
@@ -98,5 +144,11 @@ export default function useParticipantForm(initial = null) {
     validarCedula,
     errorCedula,
     setErrorCedula,
+    pagos,
+    setPagos,
+    addPayment,
+    updatePayment,
+    removePayment,
+    normalizePaymentsFromDoc,
   };
 }

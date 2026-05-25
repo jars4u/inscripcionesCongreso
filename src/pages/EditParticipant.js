@@ -31,13 +31,14 @@ const surfaceSx = {
 export default function EditParticipant() {
   const { config } = useConfig();
   const [exento, setExento] = useState(false);
-  const { participant, setParticipant, capitalizeWords, calcularEdad } = useParticipantForm();
+  const { participant, setParticipant, capitalizeWords, calcularEdad, pagos, setPagos, normalizePaymentsFromDoc } = useParticipantForm();
   const { id } = useParams();
   const navigate = useNavigate();
   const paymentMethods = getActivePaymentMethods(config);
   const costoCongreso = getEventCost(config);
 
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [montoPagado, setMontoPagado] = useState("");
   const [montoPagado2, setMontoPagado2] = useState("");
   const [historialPagos, setHistorialPagos] = useState([]);
@@ -83,12 +84,12 @@ export default function EditParticipant() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
+          const edadVal = data.edad || (data.fechaNacimiento ? calcularEdad(data.fechaNacimiento) : 0);
           setParticipant({
             nombres: data.nombres || data.nombre || "",
             apellidos: data.apellidos || data.apellido || "",
             ci: data.ci || data.cedula || "",
-            edad:
-              data.edad || (data.fechaNacimiento ? calcularEdad(data.fechaNacimiento) : 0),
+            edad: edadVal,
             telefonoMovil: data.telefonoMovil || data.telefono || "",
             telefonoFijo: data.telefonoFijo || "",
             email: data.email || "",
@@ -132,6 +133,7 @@ export default function EditParticipant() {
               enfermedad: { respuesta: false, detalle: "" },
               actividadFisica: { respuesta: false, detalle: "" },
             },
+            tipoRegistro: data.tipoRegistro || (edadVal < 18 ? "Participante menor de edad" : "Participante"),
           });
           // miembro/bautizado están dentro de participant.iglesia
           setExento(!!data.exento);
@@ -156,6 +158,8 @@ export default function EditParticipant() {
               : ""
           );
           setHistorialPagos(data.historialPagos || []);
+          // normalize pagosDetalle or legacy fields into pagos state
+          setPagos(normalizePaymentsFromDoc(data));
           setFormaPago(data.formaPago || "");
           setReferencia(data.referencia || "");
           setZelleInfo(data.zelleInfo || "");
@@ -175,35 +179,18 @@ export default function EditParticipant() {
 
     cargarParticipante();
     return () => {};
-  }, [id, navigate, config, calcularEdad, setParticipant]);
+  }, [id, navigate, config]);
 
-  const handleGuardar = async () => {
+  const handleGuardar = async ({ participant: p, pagos: pagosArr = [], exento: isExento }) => {
+    if (submitting) return;
+    setSubmitting(true);
     if (!(await validarCampos())) {
+      setSubmitting(false);
       return;
     }
     try {
-      const paymentLine1 = buildPaymentLine({
-        amount: montoPagado,
-        methodName: formaPago,
-        reference: referencia,
-        zelleInfo,
-        exchangeRate: 0,
-        config,
-      });
       let tasaBCVActual = 0;
-      const paymentLine2 = agregarSegundaForma
-        ? buildPaymentLine({
-            amount: montoPagado2,
-            methodName: segundaFormaPago,
-            reference: referencia2,
-            zelleInfo: zelleInfo2,
-            exchangeRate: 0,
-            config,
-          })
-        : null;
-      const requiresBcv = [paymentLine1, paymentLine2].some(
-        (line) => line?.currency === "bs"
-      );
+      const requiresBcv = (pagosArr || []).some((line) => (line.currency === 'bs' || (line.methodName && line.methodName.toLowerCase().includes('bs'))));
       if (requiresBcv) {
         try {
           const resp = await fetch(
@@ -215,30 +202,11 @@ export default function EditParticipant() {
           tasaBCVActual = 0;
         }
       }
-      const normalizedLine1 = buildPaymentLine({
-        amount: montoPagado,
-        methodName: formaPago,
-        reference: referencia,
-        zelleInfo,
-        exchangeRate: tasaBCVActual,
-        config,
-      });
-      const normalizedLine2 = agregarSegundaForma
-        ? buildPaymentLine({
-            amount: montoPagado2,
-            methodName: segundaFormaPago,
-            reference: referencia2,
-            zelleInfo: zelleInfo2,
-            exchangeRate: tasaBCVActual,
-            config,
-          })
-        : null;
-      const paymentLines = [normalizedLine1, normalizedLine2].filter(
-        (line) => line && line.amountOriginal > 0
-      );
+      const normalizedLines = (pagosArr || []).map((line) => buildPaymentLine({ amount: line.amountOriginal, methodName: line.methodName, reference: line.reference, zelleInfo: line.zelleInfo, exchangeRate: tasaBCVActual, config }));
+      const paymentLines = normalizedLines.filter((line) => line && line.amountOriginal > 0);
       const { totalUsd: montoTotal } = summarizePayments(paymentLines);
-      const monto1 = normalizedLine1.amountUsd;
-      const monto2 = normalizedLine2?.amountUsd || 0;
+      const monto1 = normalizedLines[0]?.amountUsd || 0;
+      const monto2 = normalizedLines[1]?.amountUsd || 0;
       let pago = false;
       let excedente = 0;
       if (montoTotal >= costoCongreso) {
@@ -261,7 +229,7 @@ export default function EditParticipant() {
         if (typeof value === "string") return value.toUpperCase();
         return value;
       };
-      const normalizedParticipant = deepUppercase(participant);
+      const normalizedParticipant = deepUppercase(p);
       // Leer el participante actual para comparar montoPagado
       const docSnap = await getDoc(docRef);
           let updateData = {
@@ -271,37 +239,37 @@ export default function EditParticipant() {
             pago,
             montoPagado: exento ? 0 : montoTotal,
             excedente: exento ? 0 : excedente,
-            formaPago: exento ? "Exento" : monto1 > 0 ? normalizedLine1.methodName : "",
+            formaPago: exento ? "Exento" : monto1 > 0 ? normalizedLines[0]?.methodName || "" : "",
             referencia: exento
               ? ""
               : monto1 > 0
-              ? normalizedLine1.reference
+              ? normalizedLines[0]?.reference || ""
               : "",
             zelleInfo: exento
               ? ""
               : monto1 > 0
-              ? normalizedLine1.zelleInfo
+              ? normalizedLines[0]?.zelleInfo || ""
               : "",
             segundaFormaPago: exento
               ? ""
-              : normalizedLine2?.amountUsd > 0
-              ? normalizedLine2.methodName
+              : normalizedLines[1]?.amountUsd > 0
+              ? normalizedLines[1]?.methodName
               : "",
             montoPagado2: exento ? 0 : monto2,
             referencia2: exento
               ? ""
-              : normalizedLine2?.amountUsd > 0
-              ? normalizedLine2.reference
+              : normalizedLines[1]?.amountUsd > 0
+              ? normalizedLines[1]?.reference || ""
               : "",
             zelleInfo2: exento
               ? ""
-              : normalizedLine2?.amountUsd > 0
-              ? normalizedLine2.zelleInfo
+              : normalizedLines[1]?.amountUsd > 0
+              ? normalizedLines[1]?.zelleInfo || ""
               : "",
-            monedaPago: exento ? "" : normalizedLine1.currency,
-            monedaPago2: exento ? "" : normalizedLine2?.currency || "",
-            montoOriginalPago: exento ? 0 : normalizedLine1.amountOriginal,
-            montoOriginalPago2: exento ? 0 : normalizedLine2?.amountOriginal || 0,
+            monedaPago: exento ? "" : normalizedLines[0]?.currency || "",
+            monedaPago2: exento ? "" : normalizedLines[1]?.currency || "",
+            montoOriginalPago: exento ? 0 : normalizedLines[0]?.amountOriginal || 0,
+            montoOriginalPago2: exento ? 0 : normalizedLines[1]?.amountOriginal || 0,
             pagosDetalle: exento ? [] : paymentLines,
             exento,
           };
@@ -332,6 +300,8 @@ export default function EditParticipant() {
       navigate("/dashboard");
     } catch (error) {
       // alert("Error al actualizar participante: " + error.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -417,30 +387,17 @@ export default function EditParticipant() {
           validarCedula={() => { /* use existing validation flow in this page */ }}
           errorCedula={null}
           setErrorCedula={() => {}}
-          montoPagado={montoPagado}
-          setMontoPagado={setMontoPagado}
-          montoPagado2={montoPagado2}
-          setMontoPagado2={setMontoPagado2}
-          formaPago={formaPago}
-          setFormaPago={setFormaPago}
-          referencia={referencia}
-          setReferencia={setReferencia}
-          zelleInfo={zelleInfo}
-          setZelleInfo={setZelleInfo}
-          agregarSegundaForma={agregarSegundaForma}
-          setAgregarSegundaForma={setAgregarSegundaForma}
-          segundaFormaPago={segundaFormaPago}
-          setSegundaFormaPago={setSegundaFormaPago}
-          referencia2={referencia2}
-          setReferencia2={setReferencia2}
-          zelleInfo2={zelleInfo2}
-          setZelleInfo2={setZelleInfo2}
+          pagos={pagos}
+          addPayment={(p) => setPagos((cur) => [...cur, p])}
+          updatePayment={(id, patch) => setPagos((cur) => cur.map((l) => (l.id === id ? { ...l, ...patch } : l)))}
+          removePayment={(id) => setPagos((cur) => cur.filter((l) => l.id !== id))}
           exento={exento}
           setExento={setExento}
           paymentMethods={paymentMethods}
           costoCongreso={costoCongreso}
           surfaceSx={surfaceSx}
           submitLabel="Guardar cambios"
+          submitting={submitting}
           onSubmit={handleGuardar}
         />
       </Box>

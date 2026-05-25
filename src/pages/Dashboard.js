@@ -9,6 +9,7 @@ import {
   IconButton,
   InputAdornment,
   Paper,
+  LinearProgress,
   Table,
   TableBody,
   TableCell,
@@ -29,6 +30,10 @@ import ArrowOutwardIcon from "@mui/icons-material/ArrowOutward";
 import SwapVertIcon from "@mui/icons-material/SwapVert";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import PeopleOutlineIcon from '@mui/icons-material/PeopleOutline';
+import ChildCareIcon from '@mui/icons-material/ChildCare';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import ChurchIcon from '@mui/icons-material/Church';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import LabelImportantIcon from '@mui/icons-material/LabelImportant';
@@ -147,12 +152,44 @@ function getParticipantStatus(participant, costoCongreso) {
   };
 }
 
+const TIPO_OPTIONS = [
+  "Participante",
+  "Menor de edad",
+  "Visitante",
+  "Otra iglesia",
+  "Servidor",
+];
+
+function getTipoRegistro(participant) {
+  if (!participant) return "Participante";
+  if (participant.tipoRegistro) return participant.tipoRegistro;
+  const edad = participant.edad || (participant.fechaNacimiento ? (() => {
+    try {
+      const birth = new Date(participant.fechaNacimiento);
+      const today = new Date();
+      let age = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+        age--;
+      }
+      return age;
+    } catch (e) {
+      return null;
+    }
+  })() : null);
+
+  if (typeof edad === "number" && edad < 18) return "Participante menor de edad";
+  return "Participante";
+}
+
 export default function Dashboard() {
   const [data, setData] = useState([]);
   const [dataError, setDataError] = useState("");
+  const [loadingData, setLoadingData] = useState(true);
   const { config } = useConfig();
   const [filtro, setFiltro] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
+  const [tipoFilter, setTipoFilter] = useState("todos");
   const [sortColumn, setSortColumn] = useState("nombre");
   const [sortDirection, setSortDirection] = useState("asc");
 
@@ -161,6 +198,7 @@ export default function Dashboard() {
   const { user, isAdmin } = useAuth();
 
   const cargarDatos = async () => {
+    setLoadingData(true);
     try {
       setDataError("");
       const snapshot = await getDocs(collection(db, "participantes"));
@@ -177,6 +215,8 @@ export default function Dashboard() {
       }
 
       setDataError("No se pudieron cargar los participantes. Intenta nuevamente.");
+    } finally {
+      setLoadingData(false);
     }
   };
 
@@ -228,6 +268,12 @@ export default function Dashboard() {
     );
   };
 
+  const toggleTipoFilter = (value) => {
+    setTipoFilter((currentValue) =>
+      currentValue === value || value === "todos" ? "todos" : value
+    );
+  };
+
   const costoCongreso = getEventCost(config);
 
   const getField = (p, col) => {
@@ -260,7 +306,7 @@ export default function Dashboard() {
 
   // Filtrar y ordenar datos
   const datosFiltrados = data
-      .filter((participant) => {
+    .filter((participant) => {
       const fullText = `${participant.nombres || participant.nombre || ""} ${participant.apellidos || participant.apellido || ""} ${participant.ci || participant.cedula || ""}`
         .toLowerCase()
         .includes(filtro.toLowerCase());
@@ -269,11 +315,17 @@ export default function Dashboard() {
         return false;
       }
 
-      if (statusFilter === "todos") {
-        return true;
+      // filtro por estado de pago (si aplica)
+      if (statusFilter !== "todos") {
+        if (getParticipantStatus(participant, costoCongreso).key !== statusFilter) return false;
       }
 
-      return getParticipantStatus(participant, costoCongreso).key === statusFilter;
+      // filtro por tipoRegistro (si aplica)
+      if (tipoFilter !== "todos") {
+        if (getTipoRegistro(participant) !== tipoFilter) return false;
+      }
+
+      return true;
     })
     .sort((a, b) => {
       let rawA = getField(a, sortColumn);
@@ -585,6 +637,7 @@ export default function Dashboard() {
       )}
 
       <Paper sx={{ ...surfaceSx, mt: 3 }}>
+        {loadingData && <LinearProgress />}
         <Box
           sx={{
             p: { xs: 1.5, md: 3 },
@@ -602,7 +655,9 @@ export default function Dashboard() {
             <Box>
               <Typography variant="h5">Participantes</Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                {statusFilter === "todos"
+                {tipoFilter !== "todos"
+                  ? `${tipoFilter}: ${datosFiltrados.length} resultados.`
+                  : statusFilter === "todos"
                   ? `Mostrando ${datosFiltrados.length} participantes de ${totalParticipantes}.`
                   : `${summaryCards.find((card) => card.key === statusFilter)?.title || "Estado"}: ${datosFiltrados.length} resultados.`}
               </Typography>
@@ -692,32 +747,73 @@ export default function Dashboard() {
               px: { xs: 1, sm: 0 },
             }}
           >
-            {summaryCards.map((card) => {
-              const isActive =
-                (statusFilter === "todos" && card.key === "todos") ||
-                statusFilter === card.key;
+            <Button
+              key="todos-button"
+              size="small"
+              aria-label="Todos"
+              variant={tipoFilter === "todos" && statusFilter === "todos" ? "contained" : "outlined"}
+              onClick={() => {
+                setTipoFilter("todos");
+                setStatusFilter("todos");
+              }}
+              sx={{
+                px: 1,
+                py: 0.5,
+                minWidth: 56,
+                height: 32,
+                fontSize: "0.8rem",
+                color: tipoFilter === "todos" && statusFilter === "todos" ? "primary.contrastText" : "text.primary",
+                backgroundColor: tipoFilter === "todos" && statusFilter === "todos" ? "primary.main" : "transparent",
+                borderColor: tipoFilter === "todos" && statusFilter === "todos" ? "primary.main" : "divider",
+                "&:hover": {
+                  backgroundColor: tipoFilter === "todos" && statusFilter === "todos" ? "primary.dark" : "#EEE8D8",
+                  borderColor: tipoFilter === "todos" && statusFilter === "todos" ? "primary.dark" : "#D8D1C2",
+                },
+                whiteSpace: "nowrap",
+              }}
+            >
+              <Box display="inline-flex" alignItems="center" gap={1}>
+                <PeopleOutlineIcon fontSize="small" />
+                <Typography component="span" sx={{ display: { xs: "none", sm: "inline" } }}>Todos</Typography>
+              </Box>
+            </Button>
+
+            {TIPO_OPTIONS.map((tipo) => {
+              const isActive = tipoFilter === tipo;
+
+              let Icon = PeopleOutlineIcon;
+              if (tipo === "Participante") Icon = PersonAddAltOutlinedIcon;
+              if (tipo === "Participante menor de edad") Icon = ChildCareIcon;
+              if (tipo === "Visitante") Icon = VisibilityIcon;
+              if (tipo === "Otra iglesia") Icon = ChurchIcon;
+              if (tipo === "Servidor") Icon = AdminPanelSettingsIcon;
 
               return (
                 <Button
-                  key={card.key}
-                  aria-label={card.title}
+                  key={tipo}
+                  size="small"
+                  aria-label={tipo}
                   variant={isActive ? "contained" : "outlined"}
-                  onClick={() => toggleStatusFilter(card.key)}
+                  onClick={() => toggleTipoFilter(tipo)}
                   sx={{
-                    color: isActive ? card.color : "text.primary",
-                    backgroundColor: isActive ? card.backgroundColor : "transparent",
-                    borderColor: isActive ? card.borderColor : "divider",
+                    px: 1,
+                    py: 0.5,
+                    minWidth: 56,
+                    height: 32,
+                    fontSize: "0.8rem",
+                    color: isActive ? "primary.contrastText" : "text.primary",
+                    backgroundColor: isActive ? "primary.main" : "transparent",
+                    borderColor: isActive ? "primary.main" : "divider",
                     "&:hover": {
-                      backgroundColor: isActive ? card.backgroundColor : "#EEE8D8",
-                      borderColor: isActive ? card.borderColor : "#D8D1C2",
+                      backgroundColor: isActive ? "primary.dark" : "#EEE8D8",
+                      borderColor: isActive ? "primary.dark" : "#D8D1C2",
                     },
-                    // ensure buttons don't wrap their content on mobile
                     whiteSpace: "nowrap",
                   }}
                 >
                   <Box display="inline-flex" alignItems="center" gap={1}>
-                    {card.icon}
-                    <Typography component="span" sx={{ display: { xs: "none", sm: "inline" } }}>{card.title}</Typography>
+                    <Icon fontSize="small" />
+                    <Typography component="span" sx={{ display: { xs: "none", sm: "inline" } }}>{tipo}</Typography>
                   </Box>
                 </Button>
               );
@@ -734,13 +830,14 @@ export default function Dashboard() {
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                   Ajusta la búsqueda o limpia el filtro para volver a ver participantes.
                 </Typography>
-                {(filtro || statusFilter !== "todos") && (
+                {(filtro || statusFilter !== "todos" || tipoFilter !== "todos") && (
                   <Button
                     variant="text"
                     sx={{ mt: 1.5 }}
                     onClick={() => {
                       setFiltro("");
                       setStatusFilter("todos");
+                      setTipoFilter("todos");
                     }}
                   >
                     Limpiar vista
@@ -841,13 +938,14 @@ export default function Dashboard() {
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                         Ajusta la búsqueda o limpia el filtro para volver a ver participantes.
                       </Typography>
-                      {(filtro || statusFilter !== "todos") && (
+                      {(filtro || statusFilter !== "todos" || tipoFilter !== "todos") && (
                         <Button
                           variant="text"
                           sx={{ mt: 2 }}
                           onClick={() => {
                             setFiltro("");
                             setStatusFilter("todos");
+                            setTipoFilter("todos");
                           }}
                         >
                           Limpiar vista
