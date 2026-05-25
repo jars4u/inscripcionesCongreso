@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { DEFAULT_APP_CONFIG, subscribeAppConfig } from '../utils/paymentConfig';
+import { DEFAULT_APP_CONFIG, subscribeAppConfig, getAppConfig } from '../utils/paymentConfig';
 
 const ConfigContext = createContext({ config: DEFAULT_APP_CONFIG, loading: true, error: null });
 
@@ -10,29 +10,75 @@ export function ConfigProvider({ children }) {
 
   useEffect(() => {
     let cancelled = false;
-
-    const unsubscribe = subscribeAppConfig((err, nextConfig) => {
-      if (cancelled) return;
-      if (err) {
-        console.error('config subscription error:', err);
-        setError(err);
-        setConfig(DEFAULT_APP_CONFIG);
-        setLoading(false);
-        return;
+    let unsubscribe = null;
+    // If we have a cached config in localStorage, use it immediately so the
+    // UI doesn't show the hardcoded default ($8) on cold start. We'll still
+    // fetch the authoritative config below and update when available.
+    try {
+      const cached = localStorage.getItem('appConfig');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && !cancelled) {
+          setConfig(parsed);
+          setLoading(false);
+        }
       }
-      setConfig(nextConfig);
-      setError(null);
-      setLoading(false);
-    });
+    } catch (e) {
+      // ignore malformed cache
+    }
+
+    // First, try to fetch a snapshot of the config once so the app doesn't
+    // fall back to the DEFAULT_APP_CONFIG (eventoUsd=8) intermittently.
+    (async () => {
+      try {
+        const initial = await getAppConfig();
+        if (cancelled) return;
+        setConfig(initial);
+        setError(null);
+        try {
+          localStorage.setItem('appConfig', JSON.stringify(initial));
+        } catch (e) {
+          // ignore storage errors
+        }
+      } catch (err) {
+        console.error('getAppConfig error:', err);
+        if (!cancelled) {
+          setError(err);
+          setConfig(DEFAULT_APP_CONFIG);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+
+      // Then subscribe to live updates; subscription will update config when available.
+      try {
+        unsubscribe = subscribeAppConfig((err, nextConfig) => {
+          if (cancelled) return;
+          if (err) {
+            console.error('config subscription error:', err);
+            setError(err);
+            return;
+          }
+          setConfig(nextConfig);
+          setError(null);
+        });
+      } catch (err) {
+        console.error('subscribeAppConfig error:', err);
+      }
+    })();
 
     return () => {
       cancelled = true;
-      if (typeof unsubscribe === 'function') unsubscribe();
+      try {
+        if (typeof unsubscribe === 'function') unsubscribe();
+      } catch (e) {
+        // ignore
+      }
     };
   }, []);
 
   if (loading) {
-    return <div style={{padding: 40, textAlign: 'center'}}>Cargando configuración global...</div>;
+    return <div style={{ padding: 40, textAlign: 'center' }}>Cargando configuración global...</div>;
   }
 
   return (

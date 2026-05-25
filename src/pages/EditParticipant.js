@@ -133,7 +133,7 @@ export default function EditParticipant() {
               enfermedad: { respuesta: false, detalle: "" },
               actividadFisica: { respuesta: false, detalle: "" },
             },
-            tipoRegistro: data.tipoRegistro || (edadVal < 18 ? "Participante menor de edad" : "Participante"),
+            tipoRegistro: data.tipoRegistro || (edadVal < 18 ? "Menor de edad" : "Participante"),
           });
           // miembro/bautizado están dentro de participant.iglesia
           setExento(!!data.exento);
@@ -215,7 +215,7 @@ export default function EditParticipant() {
       }
       const docRef = doc(db, "participantes", id);
       // Normalizar texto a mayúsculas antes de actualizar (excepto campos excluidos)
-      const EXCLUDE_UPPER = new Set(["email", "zelleInfo", "zelleInfo2", "referencia", "referencia2", "registradoPor"]);
+      const EXCLUDE_UPPER = new Set(["email", "zelleInfo", "zelleInfo2", "referencia", "referencia2", "registradoPor", "tipoRegistro"]);
       const deepUppercase = (value) => {
         if (value == null) return value;
         if (Array.isArray(value)) return value.map((v) => deepUppercase(v));

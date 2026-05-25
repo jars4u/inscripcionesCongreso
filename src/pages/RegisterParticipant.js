@@ -101,7 +101,7 @@ export default function RegisterParticipant() {
       const nuevoPago = { fecha: new Date().toISOString(), monto: montoTotal, lineas: paymentLines, tasaBCV: tasaBCVActual };
 
       // Normalizar texto a mayúsculas antes de guardar (excepto campos excluidos)
-      const EXCLUDE_UPPER = new Set(["email", "zelleInfo", "zelleInfo2", "referencia", "referencia2", "registradoPor"]);
+      const EXCLUDE_UPPER = new Set(["email", "zelleInfo", "zelleInfo2", "referencia", "referencia2", "registradoPor", "tipoRegistro"]);
       const deepUppercase = (value) => {
         if (value == null) return value;
         if (Array.isArray(value)) return value.map((v) => deepUppercase(v));

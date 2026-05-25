@@ -161,8 +161,22 @@ const TIPO_OPTIONS = [
 ];
 
 function getTipoRegistro(participant) {
+  // Normalize any incoming tipoRegistro labels to canonical set used across the app.
+  const canonical = (raw) => {
+    if (!raw && raw !== "") return "";
+    const s = String(raw || "").trim().toLowerCase();
+    if (!s) return "";
+    if (s.includes("menor")) return "Menor de edad";
+    if (s.includes("participante")) return "Participante";
+    if (s.includes("visitante")) return "Visitante";
+    if (s.includes("otra iglesia") || s.includes("iglesia")) return "Otra iglesia";
+    if (s.includes("servid")) return "Servidor";
+    return raw;
+  };
+
   if (!participant) return "Participante";
-  if (participant.tipoRegistro) return participant.tipoRegistro;
+  if (participant.tipoRegistro) return canonical(participant.tipoRegistro);
+
   const edad = participant.edad || (participant.fechaNacimiento ? (() => {
     try {
       const birth = new Date(participant.fechaNacimiento);
@@ -178,7 +192,7 @@ function getTipoRegistro(participant) {
     }
   })() : null);
 
-  if (typeof edad === "number" && edad < 18) return "Participante menor de edad";
+  if (typeof edad === "number" && edad < 18) return "Menor de edad";
   return "Participante";
 }
 
@@ -783,7 +797,7 @@ export default function Dashboard() {
 
               let Icon = PeopleOutlineIcon;
               if (tipo === "Participante") Icon = PersonAddAltOutlinedIcon;
-              if (tipo === "Participante menor de edad") Icon = ChildCareIcon;
+              if (tipo === "Menor de edad") Icon = ChildCareIcon;
               if (tipo === "Visitante") Icon = VisibilityIcon;
               if (tipo === "Otra iglesia") Icon = ChurchIcon;
               if (tipo === "Servidor") Icon = AdminPanelSettingsIcon;

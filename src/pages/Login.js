@@ -67,98 +67,21 @@ export default function Login() {
       <Box
         sx={{
           width: '100%',
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1.1fr) minmax(360px, 0.9fr)' },
+          display: 'flex',
+          justifyContent: 'center',
           gap: 2,
         }}
       >
-        <Paper
-          sx={{
-            ...surfaceSx,
-            p: { xs: 3, md: 5 },
-            background: 'linear-gradient(180deg, #F7F3E8 0%, #EEE8D8 100%)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            minHeight: { xs: 'auto', md: 560 },
-            gap: 3,
-          }}
-        >
-          <Box>
-            <Box
-              mt={1}
-              sx={{
-                display: 'grid',
-                gap: { xs: 2.5, md: 3 },
-                justifyItems: { xs: 'start', md: 'center' },
-              }}
-            >
-              <Box
-                sx={{
-                  display: 'grid',
-                  gap: 1.25,
-                  justifyItems: { xs: 'start', md: 'center' },
-                }}
-              >
-                <Box
-                  component="img"
-                  src={process.env.PUBLIC_URL + '/Jovenes LOGO.png'}
-                  alt="Logo Jovenes"
-                  sx={{ width: { xs: 100, md: 150 }, maxWidth: '100%', display: 'block' }}
-                />
-                <Box
-                  sx={{
-                    width: { xs: '100%', sm: 280, md: 320 },
-                    maxWidth: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 1,
-                  }}
-                >
-                  <Box
-                    component="img"
-                    src={process.env.PUBLIC_URL + '/pnglogo-camp.png'}
-                    alt="Logo Promovidos 2026"
-                    sx={{ width: { xs: 150, md: 320 }, maxWidth: '100%', display: 'block' }}
-                  />
-                </Box>
-              </Box>
-              <Box sx={{ textAlign: { xs: 'left', md: 'center' } }}>
-                <Typography variant="h4" fontWeight="bold" color="text.secondary" sx={{ mt: 1 }}>
-                  SISTEMA DE INSCRIPCIONES
-                </Typography>
-              </Box>
+        <Paper sx={{ ...surfaceSx, p: { xs: 3, md: 4 }, display: 'flex', flexDirection: 'column', justifyContent: 'center', width: '100%', maxWidth: 520, mx: 'auto' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, mb: 1 }}>
+            <Box sx={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Box component="img" src={process.env.PUBLIC_URL + '/Jovenes LOGO.png'} alt="Logo Jovenes" sx={{ width: { xs: 80, sm: 100 }, maxWidth: '100%', display: 'block' }} />
+              <Box component="img" src={process.env.PUBLIC_URL + '/pnglogo-camp.png'} alt="Logo Promovidos 2026" sx={{ width: { xs: 120, sm: 160 }, maxWidth: '100%', display: 'block' }} />
             </Box>
+            <Typography variant="h5" fontWeight="bold" color="text.secondary" sx={{ textAlign: 'center', letterSpacing: '0.12em'   }}>
+              SISTEMA DE INSCRIPCIONES
+            </Typography>
           </Box>
-
-          <Box>
-            <Divider sx={{ my: 3 }} />
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' },
-                gap: 1,
-              }}
-            >
-              <Box sx={{ ...surfaceSx, p: 1.5, backgroundColor: '#FFFFFF' }}>
-                <Typography variant="caption" color="text.secondary">Paso 1</Typography>
-                <Typography variant="body2" fontWeight={700}>Identifica tu acceso</Typography>
-              </Box>
-              <Box sx={{ ...surfaceSx, p: 1.5, backgroundColor: '#FFFFFF' }}>
-                <Typography variant="caption" color="text.secondary">Paso 2</Typography>
-                <Typography variant="body2" fontWeight={700}>Entra con correo o Google</Typography>
-              </Box>
-              <Box sx={{ ...surfaceSx, p: 1.5, backgroundColor: '#FFFFFF' }}>
-                <Typography variant="caption" color="text.secondary">Paso 3</Typography>
-                <Typography variant="body2" fontWeight={700}>Continúa al dashboard</Typography>
-              </Box>
-            </Box>
-          </Box>
-        </Paper>
-
-        <Paper sx={{ ...surfaceSx, p: { xs: 3, md: 4 }, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <Typography variant="overline" sx={{ color: 'text.secondary', letterSpacing: '0.12em' }}>
             Ingreso
           </Typography>
