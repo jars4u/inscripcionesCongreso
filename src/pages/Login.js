@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase';
+import { getAuth, getGoogleProvider } from '../firebase';
 import { Button, TextField, Container, Typography, Box, Divider, Paper, Alert, InputAdornment, IconButton } from '@mui/material';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
@@ -32,7 +31,8 @@ export default function Login() {
   const login = async () => {
     setActiveMethod('email');
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const { signInWithEmailAndPassword } = await import('firebase/auth');
+      await signInWithEmailAndPassword(getAuth(), email, password);
       setError('');
     } catch (err) {
       console.error('Login error (email):', err);
@@ -47,7 +47,8 @@ export default function Login() {
   const loginWithGoogle = async () => {
     setActiveMethod('google');
     try {
-      await signInWithPopup(auth, googleProvider);
+      const { signInWithPopup } = await import('firebase/auth');
+      await signInWithPopup(getAuth(), getGoogleProvider());
       setError('');
     } catch (err) {
       console.error('Login error (google):', err);

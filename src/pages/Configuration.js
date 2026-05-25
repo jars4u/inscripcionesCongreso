@@ -28,8 +28,7 @@ import {
   normalizeConfig,
   saveAppConfig,
 } from "../utils/paymentConfig";
-import { collection, doc, getDocs, onSnapshot, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { getDb } from '../firebase';
 
 const surfaceSx = {
   backgroundColor: "#FFFFFF",
@@ -101,28 +100,42 @@ export default function Configuration() {
   useEffect(() => {
     if (!isAdmin) return;
 
-    // Suscribirse a usuarios en tiempo real
-    const usuariosCol = collection(db, 'usuarios');
-    const unsubscribeUsers = onSnapshot(usuariosCol, (snap) => {
-      const next = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setUsersList(next);
-    }, (err) => {
-      console.error('usuarios onSnapshot error:', err);
-    });
+    let unsubscribeUsers = null;
+    let cancelled = false;
 
-    // Leer admins actuales
     (async () => {
       try {
-        const adminsSnap = await getDocs(collection(db, 'admins'));
-        const s = new Set(adminsSnap.docs.map((d) => d.id));
-        setAdminsSet(s);
+        const { collection, onSnapshot, getDocs } = await import('firebase/firestore');
+
+        // Suscribirse a usuarios en tiempo real
+        const usuariosCol = collection(getDb(), 'usuarios');
+        unsubscribeUsers = onSnapshot(usuariosCol, (snap) => {
+          if (cancelled) return;
+          const next = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          setUsersList(next);
+        }, (err) => {
+          console.error('usuarios onSnapshot error:', err);
+        });
+
+        // Leer admins actuales
+        try {
+          const adminsSnap = await getDocs(collection(getDb(), 'admins'));
+          if (cancelled) return;
+          const s = new Set(adminsSnap.docs.map((d) => d.id));
+          setAdminsSet(s);
+        } catch (err) {
+          console.error('error loading admins:', err);
+        }
       } catch (err) {
-        console.error('error loading admins:', err);
+        console.error('Error initializing firestore listeners:', err);
       }
     })();
 
     return () => {
-      unsubscribeUsers();
+      cancelled = true;
+      if (unsubscribeUsers) {
+        try { unsubscribeUsers(); } catch (e) {}
+      }
     };
   }, [isAdmin]);
 
@@ -204,7 +217,8 @@ export default function Configuration() {
       setSuccess('');
 
       if (makeAdmin) {
-        await setDoc(doc(db, 'admins', uid), {
+        const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+        await setDoc(doc(getDb(), 'admins', uid), {
           grantedBy: (user && user.uid) || null,
           grantedAt: serverTimestamp(),
         });
@@ -215,7 +229,8 @@ export default function Configuration() {
           setError('No puedes revocar tu propio rol de administrador desde aquí.');
           return;
         }
-        await deleteDoc(doc(db, 'admins', uid));
+        const { doc, deleteDoc } = await import('firebase/firestore');
+        await deleteDoc(doc(getDb(), 'admins', uid));
         setAdminsSet((prev) => {
           const copy = new Set(prev);
           copy.delete(uid);

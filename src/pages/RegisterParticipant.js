@@ -15,7 +15,7 @@ import {
   Paper,
   Typography,
 } from "@mui/material";
-import { db } from "../firebase";
+import { getDb } from "../firebase";
 import ParticipantForm from "../components/ParticipantForm";
 import useParticipantForm from "../hooks/useParticipantForm";
 import { buildPaymentLine, getActivePaymentMethods, getEventCost, summarizePayments } from "../utils/paymentConfig";
@@ -39,16 +39,6 @@ export default function RegisterParticipant() {
   const { participant, setParticipant, capitalizeWords, validarCedula, errorCedula, setErrorCedula, pagos, setPagos } = useParticipantForm();
 
   const [submitting, setSubmitting] = useState(false);
-
-  const [montoPagado, setMontoPagado] = useState("");
-  const [montoPagado2, setMontoPagado2] = useState("");
-  const [formaPago, setFormaPago] = useState("");
-  const [referencia, setReferencia] = useState("");
-  const [zelleInfo, setZelleInfo] = useState("");
-  const [agregarSegundaForma, setAgregarSegundaForma] = useState(false);
-  const [segundaFormaPago, setSegundaFormaPago] = useState("");
-  const [referencia2, setReferencia2] = useState("");
-  const [zelleInfo2, setZelleInfo2] = useState("");
   const [exento, setExento] = useState(false);
   const [errorCampos, setErrorCampos] = useState("");
 
@@ -67,7 +57,7 @@ export default function RegisterParticipant() {
       return;
     }
     try {
-      const q = query(collection(db, "participantes"), where("ci", "==", p.ci));
+      const q = query(collection(getDb(), "participantes"), where("ci", "==", p.ci));
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
         setErrorCampos("Ya existe un participante con esa cédula.");
@@ -118,7 +108,7 @@ export default function RegisterParticipant() {
 
       const participantToSave = deepUppercase(p);
 
-      await addDoc(collection(db, "participantes"), {
+      await addDoc(collection(getDb(), "participantes"), {
         ...participantToSave,
         pago,
         montoPagado: isExento ? 0 : montoTotal,

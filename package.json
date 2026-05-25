@@ -19,11 +19,11 @@
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.7.0",
     "react-scripts": "5.0.1",
-    "recharts": "^3.1.0",
     "web-vitals": "^2.1.4"
   },
   "devDependencies": {
-    "firebase-admin": "^13.10.0"
+    "firebase-admin": "^13.10.0",
+    "source-map-explorer": "^2.5.3"
   },
   "scripts": {
     "start": "react-scripts start",

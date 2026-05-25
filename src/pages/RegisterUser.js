@@ -1,8 +1,5 @@
 import { useState, useEffect } from 'react';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { createSecondaryAuth, destroySecondaryApp } from '../firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { createSecondaryAuth, destroySecondaryApp, getDb } from '../firebase';
 import { Container, Typography, TextField, Button, Box, Alert, InputAdornment, IconButton } from '@mui/material';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
@@ -40,6 +37,7 @@ export default function RegisterUser() {
         throw new Error('Las contraseñas no coinciden.');
       }
 
+      const { createUserWithEmailAndPassword } = await import('firebase/auth');
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
       console.log('createUserWithEmailAndPassword result:', userCredential);
       const createdUid = userCredential?.user?.uid;
@@ -47,7 +45,8 @@ export default function RegisterUser() {
       // Registrar en colección 'usuarios' para permitir listarlos desde la UI
       if (createdUid) {
         try {
-          await setDoc(doc(db, 'usuarios', createdUid), {
+          const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+          await setDoc(doc(getDb(), 'usuarios', createdUid), {
             email,
             uid: createdUid,
             createdBy: user?.uid || null,

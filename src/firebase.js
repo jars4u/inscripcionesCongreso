@@ -1,6 +1,6 @@
 import { deleteApp, initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getAuth as _getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getFirestore as _getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB4d69YDH8fNur8Lr2zuQJsJ7OGz8KVMGQ",
@@ -12,10 +12,35 @@ const firebaseConfig = {
   measurementId: "G-XS276B0HZ0"
 };
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const googleProvider = new GoogleAuthProvider();
+let _app = null;
+let _auth = null;
+let _db = null;
+let _googleProvider = null;
+
+function initFirebase() {
+  if (_app) return _app;
+  _app = initializeApp(firebaseConfig);
+  _auth = _getAuth(_app);
+  _db = _getFirestore(_app);
+  _googleProvider = new GoogleAuthProvider();
+  _googleProvider.setCustomParameters({ prompt: 'select_account' });
+  return _app;
+}
+
+export function getAuth() {
+  initFirebase();
+  return _auth;
+}
+
+export function getDb() {
+  initFirebase();
+  return _db;
+}
+
+export function getGoogleProvider() {
+  initFirebase();
+  return _googleProvider;
+}
 
 export const createSecondaryAuth = () => {
   const secondaryApp = initializeApp(
@@ -25,12 +50,8 @@ export const createSecondaryAuth = () => {
 
   return {
     secondaryApp,
-    secondaryAuth: getAuth(secondaryApp)
+    secondaryAuth: _getAuth(secondaryApp)
   };
 };
 
 export const destroySecondaryApp = (secondaryApp) => deleteApp(secondaryApp);
-
-googleProvider.setCustomParameters({
-  prompt: 'select_account'
-});

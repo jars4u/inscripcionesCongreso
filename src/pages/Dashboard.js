@@ -37,10 +37,9 @@ import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import LabelImportantIcon from '@mui/icons-material/LabelImportant';
-import { getAuth, signOut } from "firebase/auth";
 import { getDocs, collection, deleteDoc, doc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
-import { db } from "../firebase";
+import { getDb, getAuth } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { getEventCost, getParticipantPaymentStatus } from "../utils/paymentConfig";
 import { useConfig } from "../contexts/ConfigContext";
@@ -215,7 +214,7 @@ export default function Dashboard() {
     setLoadingData(true);
     try {
       setDataError("");
-      const snapshot = await getDocs(collection(db, "participantes"));
+      const snapshot = await getDocs(collection(getDb(), "participantes"));
       const rows = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setData(rows);
     } catch (error) {
@@ -244,7 +243,7 @@ export default function Dashboard() {
     // Se ha eliminado window.confirm para compatibilidad
     if (window.confirm("¿Estás seguro de eliminar este participante?")) {
       try {
-        await deleteDoc(doc(db, "participantes", id));
+        await deleteDoc(doc(getDb(), "participantes", id));
         cargarDatos();
       } catch (error) {
         console.error("Error al eliminar participante:", error);
@@ -257,11 +256,14 @@ export default function Dashboard() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     navigate("/");
-    signOut(auth).catch((error) => {
+    try {
+      const { signOut } = await import('firebase/auth');
+      await signOut(auth);
+    } catch (error) {
       console.error("Error al cerrar sesión:", error);
-    });
+    }
   };
 
   const toggleSort = (column) => {

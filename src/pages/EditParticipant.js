@@ -10,7 +10,7 @@ import {
   where,
 } from "firebase/firestore";
 import { Alert, Box, Container, Paper, Typography } from "@mui/material";
-import { db } from "../firebase";
+import { getDb } from "../firebase";
 import {
   buildPaymentLine,
   getActivePaymentMethods,
@@ -39,16 +39,7 @@ export default function EditParticipant() {
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [montoPagado, setMontoPagado] = useState("");
-  const [montoPagado2, setMontoPagado2] = useState("");
   const [historialPagos, setHistorialPagos] = useState([]);
-  const [formaPago, setFormaPago] = useState("");
-  const [referencia, setReferencia] = useState("");
-  const [zelleInfo, setZelleInfo] = useState("");
-  const [agregarSegundaForma, setAgregarSegundaForma] = useState(false);
-  const [segundaFormaPago, setSegundaFormaPago] = useState("");
-  const [referencia2, setReferencia2] = useState("");
-  const [zelleInfo2, setZelleInfo2] = useState("");
   const [errores, setErrores] = useState({});
 
   
@@ -64,7 +55,7 @@ export default function EditParticipant() {
     if (!participant.telefonoMovil) nuevosErrores.telefono = "El teléfono es obligatorio";
     // Validar cédula única (excepto el mismo participante)
     const q = query(
-      collection(db, "participantes"),
+      collection(getDb(), "participantes"),
       where("ci", "==", participant.ci)
     );
     const snapshot = await getDocs(q);
@@ -80,7 +71,7 @@ export default function EditParticipant() {
   useEffect(() => {
     const cargarParticipante = async () => {
       try {
-        const docRef = doc(db, "participantes", id);
+        const docRef = doc(getDb(), "participantes", id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
@@ -138,35 +129,10 @@ export default function EditParticipant() {
           // miembro/bautizado están dentro de participant.iglesia
           setExento(!!data.exento);
           // pago state removed; mantenemos pago dentro del documento actualizado
-          // Si es pagado antiguo, mostrar costo en el input
-          if (data.pago && (!data.montoPagado || parseFloat(data.montoPagado) === 0)) {
-            setMontoPagado(String(getEventCost(config)));
-          } else {
-            setMontoPagado(
-              data.montoOriginalPago !== undefined
-                ? String(data.montoOriginalPago)
-                : data.montoPagado !== undefined
-                ? String(data.montoPagado)
-                : ""
-            );
-          }
-          setMontoPagado2(
-            data.montoOriginalPago2 !== undefined
-              ? String(data.montoOriginalPago2)
-              : data.montoPagado2 !== undefined
-              ? String(data.montoPagado2)
-              : ""
-          );
+          // Si es pagado antiguo, manejamos histórico y normalizamos pagos en estado compartido
           setHistorialPagos(data.historialPagos || []);
           // normalize pagosDetalle or legacy fields into pagos state
           setPagos(normalizePaymentsFromDoc(data));
-          setFormaPago(data.formaPago || "");
-          setReferencia(data.referencia || "");
-          setZelleInfo(data.zelleInfo || "");
-          setAgregarSegundaForma(!!data.segundaFormaPago);
-          setSegundaFormaPago(data.segundaFormaPago || "");
-          setReferencia2(data.referencia2 || "");
-          setZelleInfo2(data.zelleInfo2 || "");
         } else {
           navigate("/dashboard");
         }
@@ -179,7 +145,7 @@ export default function EditParticipant() {
 
     cargarParticipante();
     return () => {};
-  }, [id, navigate, config]);
+  }, [id, navigate, config, calcularEdad, normalizePaymentsFromDoc, setPagos, setParticipant]);
 
   const handleGuardar = async ({ participant: p, pagos: pagosArr = [], exento: isExento }) => {
     if (submitting) return;
@@ -213,7 +179,7 @@ export default function EditParticipant() {
         pago = true;
         excedente = montoTotal > costoCongreso ? montoTotal - costoCongreso : 0;
       }
-      const docRef = doc(db, "participantes", id);
+      const docRef = doc(getDb(), "participantes", id);
       // Normalizar texto a mayúsculas antes de actualizar (excepto campos excluidos)
       const EXCLUDE_UPPER = new Set(["email", "zelleInfo", "zelleInfo2", "referencia", "referencia2", "registradoPor", "tipoRegistro"]);
       const deepUppercase = (value) => {

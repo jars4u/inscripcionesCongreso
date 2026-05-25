@@ -1,5 +1,5 @@
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
-import { db } from "../firebase";
+import { getDb } from "../firebase";
 
 export const DEFAULT_PAYMENT_METHODS = [
   {
@@ -82,7 +82,7 @@ export function normalizeConfig(config) {
 
 export async function getAppConfig() {
   try {
-    const configRef = doc(db, ...PUBLIC_CONFIG_PATH);
+    const configRef = doc(getDb(), ...PUBLIC_CONFIG_PATH);
     const snapshot = await getDoc(configRef);
 
     if (!snapshot.exists()) {
@@ -101,8 +101,8 @@ export async function saveAppConfig(config) {
   try {
     // Write to both admin and public paths. Admin path may be protected by rules;
     // public path should be readable by regular users so UI updates for everyone.
-    const adminRef = doc(db, ...ADMIN_CONFIG_PATH);
-    const publicRef = doc(db, ...PUBLIC_CONFIG_PATH);
+    const adminRef = doc(getDb(), ...ADMIN_CONFIG_PATH);
+    const publicRef = doc(getDb(), ...PUBLIC_CONFIG_PATH);
     await setDoc(adminRef, normalized, { merge: true });
     await setDoc(publicRef, normalized, { merge: true });
     return normalized;
@@ -222,7 +222,7 @@ export function getParticipantPaymentStatus(participant, eventCostUsd) {
 
 export function subscribeAppConfig(callback) {
   try {
-    const configRef = doc(db, ...PUBLIC_CONFIG_PATH);
+    const configRef = doc(getDb(), ...PUBLIC_CONFIG_PATH);
     const unsubscribe = onSnapshot(
       configRef,
       (snap) => {

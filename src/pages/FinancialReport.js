@@ -15,7 +15,7 @@ import {
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { getDocs, collection } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
-import { db } from "../firebase";
+import { getDb } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import {
   getEventCost,
@@ -65,7 +65,7 @@ export default function FinancialReport() {
       try {
         setLoadingData(true);
         setDataError("");
-        const snapshot = await getDocs(collection(db, "participantes"));
+        const snapshot = await getDocs(collection(getDb(), "participantes"));
         if (cancelled) return;
 
         const rows = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));

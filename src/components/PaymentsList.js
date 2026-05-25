@@ -2,7 +2,7 @@ import React from "react";
 import { Box, Button, TextField, MenuItem, IconButton, Typography, Paper } from "@mui/material";
 import DeleteIcon from '@mui/icons-material/Delete';
 
-export default function PaymentsList({ pagos = [], paymentMethods = [], addPayment, updatePayment, removePayment, disabled = false }) {
+function PaymentsList({ pagos = [], paymentMethods = [], addPayment, updatePayment, removePayment, disabled = false }) {
   const handleAdd = () => {
     if (!addPayment) return;
     addPayment({ amountOriginal: 0, currency: "usd", methodName: "", reference: "", zelleInfo: "" });
@@ -57,3 +57,5 @@ export default function PaymentsList({ pagos = [], paymentMethods = [], addPayme
     </Paper>
   );
 }
+
+export default React.memo(PaymentsList);

@@ -1,7 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth, db } from '../firebase';
-import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { getAuth, getDb } from '../firebase';
 
 const AuthContext = createContext();
 export const adminEmails = ['jars4u2@gmail.com', 'carlosurdaneta@gmail.com'];
@@ -15,8 +13,11 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     let unsubscribeAdmin = null;
+    let unsub = null;
 
-    const unsub = onAuthStateChanged(auth, (user) => {
+    (async () => {
+      const { onAuthStateChanged } = await import('firebase/auth');
+      unsub = onAuthStateChanged(getAuth(), async (user) => {
       setUser(user);
       setLoading(false);
 
@@ -24,7 +25,8 @@ export const AuthProvider = ({ children }) => {
         // Persistir usuario en 'usuarios' collection
         (async () => {
           try {
-            const userRef = doc(db, 'usuarios', user.uid);
+            const { doc, getDoc, setDoc, serverTimestamp } = await import('firebase/firestore');
+            const userRef = doc(getDb(), 'usuarios', user.uid);
             const snap = await getDoc(userRef);
 
             const payload = {
@@ -47,7 +49,8 @@ export const AuthProvider = ({ children }) => {
 
         // Suscribirse al documento admins/{uid} para actualizar isAdmin en tiempo real
         try {
-          const adminRef = doc(db, 'admins', user.uid);
+          const { doc, onSnapshot } = await import('firebase/firestore');
+          const adminRef = doc(getDb(), 'admins', user.uid);
           unsubscribeAdmin = onSnapshot(adminRef, (snap) => {
             const byEmail = isAdminEmail(user.email);
             setIsAdmin(byEmail || snap.exists());
@@ -68,10 +71,14 @@ export const AuthProvider = ({ children }) => {
           unsubscribeAdmin = null;
         }
       }
+      // end onAuthStateChanged handler
     });
+    })();
 
     return () => {
-      unsub();
+      if (unsub) {
+        try { unsub(); } catch (e) {}
+      }
       if (unsubscribeAdmin) {
         try { unsubscribeAdmin(); } catch (e) {}
       }

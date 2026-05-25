@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 
 const initialParticipantTemplate = {
   nombres: "",
@@ -86,24 +86,24 @@ export default function useParticipantForm(initial = null) {
     return lines.map((l, idx) => ({ id: l.id || `${Date.now()}-${idx}`, ...l }));
   };
 
-  const addPayment = (payment) => {
+  const addPayment = useCallback((payment) => {
     const newLine = { id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`, ...payment };
     setPagos((p) => [...p, newLine]);
     return newLine.id;
-  };
+  }, []);
 
-  const updatePayment = (id, patch) => {
+  const updatePayment = useCallback((id, patch) => {
     setPagos((p) => p.map((line) => (line.id === id ? { ...line, ...patch } : line)));
-  };
+  }, []);
 
-  const removePayment = (id) => {
+  const removePayment = useCallback((id) => {
     setPagos((p) => p.filter((line) => line.id !== id));
-  };
+  }, []);
 
-  const capitalizeWords = (str = "") =>
-    String(str).replace(/\b\w+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  const capitalizeWords = useCallback((str = "") =>
+    String(str).replace(/\b\w+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()), []);
 
-  const calcularEdad = (fecha) => {
+  const calcularEdad = useCallback((fecha) => {
     if (!fecha) return "";
     const hoy = new Date();
     const nacimiento = new Date(fecha);
@@ -113,15 +113,15 @@ export default function useParticipantForm(initial = null) {
       edad--;
     }
     return edad;
-  };
+  }, []);
 
-  const handleFechaNacimiento = (e) => {
+  const handleFechaNacimiento = useCallback((e) => {
     const fecha = e.target.value;
     const edadCalc = calcularEdad(fecha);
-    setParticipant({ ...participant, fechaNacimiento: fecha, edad: edadCalc });
-  };
+    setParticipant((prev) => ({ ...prev, fechaNacimiento: fecha, edad: edadCalc }));
+  }, [calcularEdad]);
 
-  const validarCedula = () => {
+  const validarCedula = useCallback(() => {
     const ci = (participant.ci || "").trim();
     if (!ci) {
       setErrorCedula("Cédula requerida");
@@ -133,7 +133,7 @@ export default function useParticipantForm(initial = null) {
     } else {
       setErrorCedula("");
     }
-  };
+  }, [participant.ci]);
 
   return {
     participant,
