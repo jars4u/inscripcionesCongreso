@@ -3,13 +3,15 @@ import {
   Alert,
   Box,
   Button,
+  CircularProgress,
   Chip,
   Container,
   Divider,
   IconButton,
   InputAdornment,
-  Paper,
   LinearProgress,
+  Paper,
+  Pagination,
   Table,
   TableBody,
   TableCell,
@@ -18,7 +20,6 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
 import LogoutIcon from "@mui/icons-material/Logout";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -29,6 +30,7 @@ import PersonAddAltOutlinedIcon from "@mui/icons-material/PersonAddAltOutlined";
 import ArrowOutwardIcon from "@mui/icons-material/ArrowOutward";
 import SwapVertIcon from "@mui/icons-material/SwapVert";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import SearchIcon from '@mui/icons-material/Search';
 import PeopleOutlineIcon from '@mui/icons-material/PeopleOutline';
 import ChildCareIcon from '@mui/icons-material/ChildCare';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -37,10 +39,11 @@ import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import LabelImportantIcon from '@mui/icons-material/LabelImportant';
-import { getDocs, collection, deleteDoc, doc } from "firebase/firestore";
+// firestore operations handled by ParticipantsProvider
 import { useNavigate } from "react-router-dom";
-import { getDb, getAuth } from "../firebase";
+import { getAuth } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
+import { useParticipants } from "../contexts/ParticipantsContext";
 import { getEventCost, getParticipantPaymentStatus } from "../utils/paymentConfig";
 import { useConfig } from "../contexts/ConfigContext";
 
@@ -196,46 +199,21 @@ function getTipoRegistro(participant) {
 }
 
 export default function Dashboard() {
-  const [data, setData] = useState([]);
-  const [dataError, setDataError] = useState("");
-  const [loadingData, setLoadingData] = useState(true);
+  const { participants: data, loading: loadingData, error: dataError, deleteParticipant, loadPage, loadingMore, totalCount } = useParticipants();
   const { config } = useConfig();
   const [filtro, setFiltro] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [tipoFilter, setTipoFilter] = useState("todos");
   const [sortColumn, setSortColumn] = useState("nombre");
   const [sortDirection, setSortDirection] = useState("asc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const UI_PAGE_SIZE = 50;
 
   const navigate = useNavigate();
   const auth = getAuth();
   const { user, isAdmin } = useAuth();
 
-  const cargarDatos = async () => {
-    setLoadingData(true);
-    try {
-      setDataError("");
-      const snapshot = await getDocs(collection(getDb(), "participantes"));
-      const rows = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setData(rows);
-    } catch (error) {
-      console.error("Error al cargar participantes:", error);
-      setData([]);
-      if (error.code === "permission-denied") {
-        setDataError(
-          "No hay permisos para leer participantes en la nueva base de datos. Revisa las reglas de Firestore del proyecto Firebase."
-        );
-        return;
-      }
-
-      setDataError("No se pudieron cargar los participantes. Intenta nuevamente.");
-    } finally {
-      setLoadingData(false);
-    }
-  };
-
-  useEffect(() => {
-    cargarDatos();
-  }, []);
+  // participants are provided in real-time by ParticipantsProvider
 
   // Config is provided by ConfigProvider via useConfig
 
@@ -243,15 +221,15 @@ export default function Dashboard() {
     // Se ha eliminado window.confirm para compatibilidad
     if (window.confirm("¿Estás seguro de eliminar este participante?")) {
       try {
-        await deleteDoc(doc(getDb(), "participantes", id));
-        cargarDatos();
+        await deleteParticipant(id);
       } catch (error) {
         console.error("Error al eliminar participante:", error);
-        setDataError(
-          error.code === "permission-denied"
-            ? "No hay permisos para eliminar participantes en la nueva base de datos."
-            : "No se pudo eliminar el participante."
-        );
+        // Reuse dataError from context when possible; show fallback message
+        const msg = error && error.code === "permission-denied"
+          ? "No hay permisos para eliminar participantes en la nueva base de datos."
+          : "No se pudo eliminar el participante.";
+        // Log and show alert via local error state isn't available; we console.error and rely on provider's `error`.
+        console.error(msg);
       }
     }
   };
@@ -289,6 +267,13 @@ export default function Dashboard() {
       currentValue === value || value === "todos" ? "todos" : value
     );
   };
+
+  // Reset UI page when filters or sorting change. We intentionally don't include
+  // `currentPage` in deps because we want to force page 1 on filter change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filtro, statusFilter, tipoFilter, sortColumn, sortDirection]);
 
   const costoCongreso = getEventCost(config);
 
@@ -371,6 +356,25 @@ export default function Dashboard() {
     (participant) => getParticipantPaymentStatus(participant, costoCongreso).key === "pagado"
   ).length;
   const pendientes = pendientesList.length;
+
+  // Pagination helpers for MUI Pagination control using provider's server-side page loader.
+  const pageCount = totalCount ? Math.max(1, Math.ceil(totalCount / UI_PAGE_SIZE)) : Math.max(1, Math.ceil(data.length / UI_PAGE_SIZE));
+
+  useEffect(() => {
+    if (currentPage > pageCount) setCurrentPage(pageCount);
+  }, [pageCount, currentPage]);
+
+  const handlePageChange = async (_e, value) => {
+    setCurrentPage(value);
+    try {
+      if (typeof loadPage === 'function') await loadPage(value);
+    } catch (e) {
+      console.error('Error al cargar página:', e);
+    }
+    try {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (_) {}
+  };
 
   const summaryCards = [
     {
@@ -861,50 +865,52 @@ export default function Dashboard() {
                 )}
               </Paper>
             ) : (
-              datosFiltrados.map((participant) => {
-                const status = getParticipantStatus(participant, costoCongreso);
-                const paymentStatus = getParticipantPaymentStatus(participant, costoCongreso);
-                const paymentLabel = participant.pago
-                  ? participant.segundaFormaPago
-                    ? `${participant.formaPago} / ${participant.segundaFormaPago}`
-                    : participant.formaPago
-                  : "-";
+              datosFiltrados
+                .slice((currentPage - 1) * UI_PAGE_SIZE, (currentPage - 1) * UI_PAGE_SIZE + UI_PAGE_SIZE)
+                .map((participant) => {
+                  const status = getParticipantStatus(participant, costoCongreso);
+                  const paymentStatus = getParticipantPaymentStatus(participant, costoCongreso);
+                  const paymentLabel = participant.pago
+                    ? participant.segundaFormaPago
+                      ? `${participant.formaPago} / ${participant.segundaFormaPago}`
+                      : participant.formaPago
+                    : "-";
 
-                return (
-                  <Paper key={participant.id} sx={{ ...surfaceSx, p: 1.5 }}>
-                    <Box display="flex" justifyContent="space-between" gap={1.5}>
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                          {getDisplayName(participant)}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
-                          Cédula: {participant.ci || participant.cedula || "Sin cédula"}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
-                          Teléfono: {participant.telefonoMovil || participant.telefonoFijo || participant.telefono || "-"}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
-                          Registro: {participant.registradoPor || "-"}
-                        </Typography>
-                      </Box>
-                      {renderParticipantActions(participant)}
-                    </Box>
-                    <Box display="flex" alignItems="center" justifyContent="space-between" gap={1} mt={1.5}>
-                      <Chip label={status.shortLabel} sx={status.sx} />
-                      <Box sx={{ textAlign: "right" }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                          Pago: {paymentLabel}
-                        </Typography>
-                        {paymentStatus.isLegacyPaid && (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
-                            Registro heredado sin monto exacto.
+                  return (
+                    <Paper key={participant.id} sx={{ ...surfaceSx, p: 1.5 }}>
+                      <Box display="flex" justifyContent="space-between" gap={1.5}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                            {getDisplayName(participant)}
                           </Typography>
-                        )}
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                            Cédula: {participant.ci || participant.cedula || "Sin cédula"}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
+                            Teléfono: {participant.telefonoMovil || participant.telefonoFijo || participant.telefono || "-"}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
+                            Registro: {participant.registradoPor || "-"}
+                          </Typography>
+                        </Box>
+                        {renderParticipantActions(participant)}
                       </Box>
-                    </Box>
-                  </Paper>
-                );
-              })
+                      <Box display="flex" alignItems="center" justifyContent="space-between" gap={1} mt={1.5}>
+                        <Chip label={status.shortLabel} sx={status.sx} />
+                        <Box sx={{ textAlign: "right" }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                            Pago: {paymentLabel}
+                          </Typography>
+                          {paymentStatus.isLegacyPaid && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
+                              Registro heredado sin monto exacto.
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+                    </Paper>
+                  );
+                })
             )}
           </Box>
 
@@ -970,7 +976,10 @@ export default function Dashboard() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  datosFiltrados.map((p) => {
+                  (() => {
+                    const start = (currentPage - 1) * UI_PAGE_SIZE;
+                    const end = start + UI_PAGE_SIZE;
+                    return datosFiltrados.slice(start, end).map((p) => {
                     const status = getParticipantStatus(p, costoCongreso);
                     const paymentStatus = getParticipantPaymentStatus(p, costoCongreso);
 
@@ -1049,7 +1058,8 @@ export default function Dashboard() {
                         </TableCell>
                       </TableRow>
                     );
-                  })
+                    });
+                  })()
                 )}
               </TableBody>
             </Table>
@@ -1065,13 +1075,29 @@ export default function Dashboard() {
             <Typography variant="body2" color="text.secondary">
               {pendientesList.length} pendientes, {exentos.length} exentos y {legacyPaidCount} legacy en total.
             </Typography>
-            <Button
-              variant="text"
-              endIcon={<ArrowOutwardIcon fontSize="small" />}
-              onClick={() => navigate("/registrar")}
-            >
-              Nuevo registro
-            </Button>
+            <Box display="flex" alignItems="center" gap={1}>
+              {pageCount > 1 && (
+                <Box display="flex" alignItems="center" gap={1}>
+                  <Pagination
+                    count={pageCount}
+                    page={currentPage}
+                    onChange={handlePageChange}
+                    color="primary"
+                    siblingCount={1}
+                    boundaryCount={1}
+                    size="small"
+                  />
+                  {loadingMore && <CircularProgress size={16} />}
+                </Box>
+              )}
+              <Button
+                variant="text"
+                endIcon={<ArrowOutwardIcon fontSize="small" />}
+                onClick={() => navigate("/registrar")}
+              >
+                Nuevo registro
+              </Button>
+            </Box>
           </Box>
         </Box>
       </Paper>

@@ -13,9 +13,9 @@ import {
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { getDocs, collection } from "firebase/firestore";
+// participants are consumed from ParticipantsProvider
 import { useNavigate } from "react-router-dom";
-import { getDb } from "../firebase";
+import { useParticipants } from "../contexts/ParticipantsContext";
 import { useAuth } from "../contexts/AuthContext";
 import {
   getEventCost,
@@ -43,57 +43,15 @@ export default function FinancialReport() {
   const navigate = useNavigate();
   const { isAdmin, loading: authLoading } = useAuth();
 
-  const [data, setData] = useState([]);
+  const { participants: data, loading: loadingData, error: dataError } = useParticipants();
   const { config } = useConfig();
-  const [loadingData, setLoadingData] = useState(true);
-  const [dataError, setDataError] = useState("");
   const [tasaBCV, setTasaBCV] = useState(null);
   const [loadingTasa, setLoadingTasa] = useState(true);
   const [activeTab, setActiveTab] = useState("financiero");
 
   // Config provided by ConfigProvider
 
-  useEffect(() => {
-    if (authLoading || !isAdmin) {
-      setLoadingData(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    const cargarDatos = async () => {
-      try {
-        setLoadingData(true);
-        setDataError("");
-        const snapshot = await getDocs(collection(getDb(), "participantes"));
-        if (cancelled) return;
-
-        const rows = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        setData(rows);
-      } catch (error) {
-        if (cancelled) return;
-
-        setData([]);
-        if (error.code === "permission-denied") {
-          setDataError(
-            "No hay permisos para leer participantes en la base de datos."
-          );
-        } else {
-          setDataError("No se pudieron cargar los participantes. Intenta nuevamente.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingData(false);
-        }
-      }
-    };
-
-    cargarDatos();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [authLoading, isAdmin]);
+  // participants loaded in real-time by ParticipantsProvider; keep auth checks for UI if needed
 
   useEffect(() => {
     if (authLoading || !isAdmin) {

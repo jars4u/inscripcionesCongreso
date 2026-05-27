@@ -1,9 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  doc,
-  getDoc,
-  updateDoc,
   getDocs,
   collection,
   query,
@@ -11,6 +8,7 @@ import {
 } from "firebase/firestore";
 import { Alert, Box, Container, Paper, Typography } from "@mui/material";
 import { getDb } from "../firebase";
+import { useParticipants } from "../contexts/ParticipantsContext";
 import {
   buildPaymentLine,
   getActivePaymentMethods,
@@ -41,6 +39,7 @@ export default function EditParticipant() {
   const [submitting, setSubmitting] = useState(false);
   const [historialPagos, setHistorialPagos] = useState([]);
   const [errores, setErrores] = useState({});
+  const { participants, loading: participantsLoading, updateParticipant } = useParticipants();
 
   
 
@@ -69,83 +68,76 @@ export default function EditParticipant() {
   };
 
   useEffect(() => {
-    const cargarParticipante = async () => {
-      try {
-        const docRef = doc(getDb(), "participantes", id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          const edadVal = data.edad || (data.fechaNacimiento ? calcularEdad(data.fechaNacimiento) : 0);
-          setParticipant({
-            nombres: data.nombres || data.nombre || "",
-            apellidos: data.apellidos || data.apellido || "",
-            ci: data.ci || data.cedula || "",
-            edad: edadVal,
-            telefonoMovil: data.telefonoMovil || data.telefono || "",
-            telefonoFijo: data.telefonoFijo || "",
-            email: data.email || "",
-            fechaNacimiento: data.fechaNacimiento || "",
-            estadoCivil: data.estadoCivil || "Soltero",
-            estadoCivilOtro: data.estadoCivilOtro || "",
-            numHijos: data.numHijos || 0,
-            profesion: data.profesion || "",
-            ocupacion: data.ocupacion || "",
-            viveConPadres: data.viveConPadres || false,
-            nombreRepresentante: data.nombreRepresentante || "",
-            telefonoRepresentante: data.telefonoRepresentante || "",
-            sirveMinisterio: data.sirveMinisterio || data.sirveMinisterio || "",
-            residencia: {
-              zona: data.residencia?.zona || data.zona || "",
-              municipio: data.residencia?.municipio || "",
-              parroquia: data.residencia?.parroquia || "",
-              sector: data.residencia?.sector || "",
-              calle: data.residencia?.calle || "",
-              avenida: data.residencia?.avenida || "",
-              urbanizacion: data.residencia?.urbanizacion || "",
-              barrio: data.residencia?.barrio || "",
-              nroCasa: data.residencia?.nroCasa || "",
-              puntoReferencia: data.residencia?.puntoReferencia || "",
-              edificio: data.residencia?.edificio || "",
-              piso: data.residencia?.piso || "",
-              apto: data.residencia?.apto || "",
-            },
-            iglesia: {
-              bautizado: data.iglesia?.bautizado || data.bautizado || false,
-              miembro: data.iglesia?.miembro || data.miembro || false,
-              afiliacion: data.iglesia?.afiliacion || "",
-              bautismo: data.iglesia?.bautismo || "",
-              visitante: data.iglesia?.visitante || "",
-              cuantoTiempo: data.iglesia?.cuantoTiempo || "",
-            },
-            campamento: data.campamento || {
-              medicamentoDependiente: { respuesta: false, detalle: "" },
-              alergicoAlimento: { respuesta: false, detalle: "" },
-              alergicoMedicamento: { respuesta: false, detalle: "" },
-              enfermedad: { respuesta: false, detalle: "" },
-              actividadFisica: { respuesta: false, detalle: "" },
-            },
-            tipoRegistro: data.tipoRegistro || (edadVal < 18 ? "Menor de edad" : "Participante"),
-          });
-          // miembro/bautizado están dentro de participant.iglesia
-          setExento(!!data.exento);
-          // pago state removed; mantenemos pago dentro del documento actualizado
-          // Si es pagado antiguo, manejamos histórico y normalizamos pagos en estado compartido
-          setHistorialPagos(data.historialPagos || []);
-          // normalize pagosDetalle or legacy fields into pagos state
-          setPagos(normalizePaymentsFromDoc(data));
-        } else {
-          navigate("/dashboard");
-        }
-      } catch (error) {
-        console.error("Error al cargar participante:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    cargarParticipante();
-    return () => {};
-  }, [id, navigate, config, calcularEdad, normalizePaymentsFromDoc, setPagos, setParticipant]);
+    // prefer participant from realtime list; wait for participants to load
+    if (participantsLoading) return;
+    const current = participants.find((p) => p.id === id);
+    if (!current) {
+      navigate("/dashboard");
+      return;
+    }
+    try {
+      const data = current;
+      const edadVal = data.edad || (data.fechaNacimiento ? calcularEdad(data.fechaNacimiento) : 0);
+      setParticipant({
+        nombres: data.nombres || data.nombre || "",
+        apellidos: data.apellidos || data.apellido || "",
+        ci: data.ci || data.cedula || "",
+        edad: edadVal,
+        telefonoMovil: data.telefonoMovil || data.telefono || "",
+        telefonoFijo: data.telefonoFijo || "",
+        email: data.email || "",
+        fechaNacimiento: data.fechaNacimiento || "",
+        estadoCivil: data.estadoCivil || "Soltero",
+        estadoCivilOtro: data.estadoCivilOtro || "",
+        numHijos: data.numHijos || 0,
+        profesion: data.profesion || "",
+        ocupacion: data.ocupacion || "",
+        viveConPadres: data.viveConPadres || false,
+        nombreRepresentante: data.nombreRepresentante || "",
+        telefonoRepresentante: data.telefonoRepresentante || "",
+        sirveMinisterio: data.sirveMinisterio || data.sirveMinisterio || "",
+        residencia: {
+          zona: data.residencia?.zona || data.zona || "",
+          municipio: data.residencia?.municipio || "",
+          parroquia: data.residencia?.parroquia || "",
+          sector: data.residencia?.sector || "",
+          calle: data.residencia?.calle || "",
+          avenida: data.residencia?.avenida || "",
+          urbanizacion: data.residencia?.urbanizacion || "",
+          barrio: data.residencia?.barrio || "",
+          nroCasa: data.residencia?.nroCasa || "",
+          puntoReferencia: data.residencia?.puntoReferencia || "",
+          edificio: data.residencia?.edificio || "",
+          piso: data.residencia?.piso || "",
+          apto: data.residencia?.apto || "",
+        },
+        iglesia: {
+          bautizado: data.iglesia?.bautizado || data.bautizado || false,
+          miembro: data.iglesia?.miembro || data.miembro || false,
+          afiliacion: data.iglesia?.afiliacion || "",
+          bautismo: data.iglesia?.bautismo || "",
+          visitante: data.iglesia?.visitante || "",
+          cuantoTiempo: data.iglesia?.cuantoTiempo || "",
+        },
+        campamento: data.campamento || {
+          medicamentoDependiente: { respuesta: false, detalle: "" },
+          alergicoAlimento: { respuesta: false, detalle: "" },
+          alergicoMedicamento: { respuesta: false, detalle: "" },
+          enfermedad: { respuesta: false, detalle: "" },
+          actividadFisica: { respuesta: false, detalle: "" },
+        },
+        tipoRegistro: data.tipoRegistro || (edadVal < 18 ? "Menor de edad" : "Participante"),
+      });
+      setExento(!!data.exento);
+      setHistorialPagos(data.historialPagos || []);
+      setPagos(normalizePaymentsFromDoc(data));
+    } catch (error) {
+      console.error("Error al cargar participante desde participants context:", error);
+    } finally {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [participantsLoading, participants, id]);
 
   const handleGuardar = async ({ participant: p, pagos: pagosArr = [], exento: isExento }) => {
     if (submitting) return;
@@ -179,7 +171,6 @@ export default function EditParticipant() {
         pago = true;
         excedente = montoTotal > costoCongreso ? montoTotal - costoCongreso : 0;
       }
-      const docRef = doc(getDb(), "participantes", id);
       // Normalizar texto a mayúsculas antes de actualizar (excepto campos excluidos)
       const EXCLUDE_UPPER = new Set(["email", "zelleInfo", "zelleInfo2", "referencia", "referencia2", "registradoPor", "tipoRegistro"]);
       const deepUppercase = (value) => {
@@ -196,9 +187,7 @@ export default function EditParticipant() {
         return value;
       };
       const normalizedParticipant = deepUppercase(p);
-      // Leer el participante actual para comparar montoPagado
-      const docSnap = await getDoc(docRef);
-          let updateData = {
+      let updateData = {
             ...normalizedParticipant,
             miembro: !!participant.iglesia?.miembro,
             bautizado: !!participant.iglesia?.bautizado,
@@ -239,15 +228,9 @@ export default function EditParticipant() {
             pagosDetalle: exento ? [] : paymentLines,
             exento,
           };
-      let montoAnterior = 0;
-      let historialAnterior = [];
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        montoAnterior = parseFloat(data.montoPagado) || 0;
-        historialAnterior = Array.isArray(data.historialPagos)
-          ? data.historialPagos
-          : [];
-      }
+      const prev = participants.find((p) => p.id === id) || {};
+      let montoAnterior = parseFloat(prev.montoPagado) || 0;
+      let historialAnterior = Array.isArray(prev.historialPagos) ? prev.historialPagos : [];
       // Si el montoPagado cambió y es mayor a 0, registrar fecha y tasa BCV en historial
       if (montoTotal > 0 && montoTotal !== montoAnterior) {
              const nuevoPago = {
@@ -262,7 +245,7 @@ export default function EditParticipant() {
       } else {
         updateData.historialPagos = historialAnterior;
       }
-      await updateDoc(docRef, updateData);
+      await updateParticipant(id, updateData);
       navigate("/dashboard");
     } catch (error) {
       // alert("Error al actualizar participante: " + error.message);

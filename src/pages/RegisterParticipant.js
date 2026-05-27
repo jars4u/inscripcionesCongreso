@@ -5,7 +5,6 @@ import {
   query,
   where,
   getDocs,
-  addDoc,
   serverTimestamp,
 } from "firebase/firestore";
 import {
@@ -16,6 +15,7 @@ import {
   Typography,
 } from "@mui/material";
 import { getDb } from "../firebase";
+import { useParticipants } from "../contexts/ParticipantsContext";
 import ParticipantForm from "../components/ParticipantForm";
 import useParticipantForm from "../hooks/useParticipantForm";
 import { buildPaymentLine, getActivePaymentMethods, getEventCost, summarizePayments } from "../utils/paymentConfig";
@@ -33,6 +33,7 @@ export default function RegisterParticipant() {
   const navigate = useNavigate();
   const { config } = useConfig();
   const { user } = useAuth();
+  const { addParticipant } = useParticipants();
   const paymentMethods = getActivePaymentMethods(config);
   const costoCongreso = getEventCost(config);
 
@@ -108,7 +109,7 @@ export default function RegisterParticipant() {
 
       const participantToSave = deepUppercase(p);
 
-      await addDoc(collection(getDb(), "participantes"), {
+      await addParticipant({
         ...participantToSave,
         pago,
         montoPagado: isExento ? 0 : montoTotal,
@@ -132,7 +133,8 @@ export default function RegisterParticipant() {
         historialPagos: [nuevoPago],
         timestamp: serverTimestamp(),
       });
-      navigate("/dashboard");
+      // navigate to dashboard after optimistic add
+      navigate(`/dashboard`);
     } catch (error) {
       console.error('RegisterParticipant error:', error);
       setErrorCampos(error?.message || "Error al registrar participante.");
