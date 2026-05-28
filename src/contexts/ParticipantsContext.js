@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
   collection,
   onSnapshot,
@@ -10,11 +10,14 @@ import {
   query as firestoreQuery,
   orderBy,
   limit as firestoreLimit,
+  where,
   startAfter,
   getCountFromServer,
 } from 'firebase/firestore';
 import { getDb } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { useConfig } from '../contexts/ConfigContext';
+import { getEventCost } from '../utils/paymentConfig';
 
 const ParticipantsContext = createContext(null);
 
@@ -28,8 +31,59 @@ export function ParticipantsProvider({ children }) {
 
   const PAGE_SIZE = 50;
   const [totalCount, setTotalCount] = useState(null);
+  const [globalCounts, setGlobalCounts] = useState({ total: null, pagados: null, pendientes: null, exentos: null, legacy: null, loading: false });
+  const [activePage, setActivePage] = useState(1);
 
   const { user } = useAuth();
+  const { config } = useConfig();
+  const costoCongreso = getEventCost(config);
+
+  const doFetchGlobalCounts = useCallback(async () => {
+    setGlobalCounts((s) => ({ ...s, loading: true }));
+    try {
+      const col = collection(getDb(), 'participantes');
+      const qTotal = firestoreQuery(col);
+      const qExentos = firestoreQuery(col, where('exento', '==', true));
+      const qLegacy = firestoreQuery(col, where('pago', '==', true), where('montoPagado', '==', 0));
+      const qPaidWithAmount = firestoreQuery(col, where('montoPagado', '>=', Number(costoCongreso || 0)));
+
+      const [totalSnap, exSnap, legacySnap, paidSnap] = await Promise.all([
+        getCountFromServer(qTotal),
+        getCountFromServer(qExentos),
+        getCountFromServer(qLegacy),
+        getCountFromServer(qPaidWithAmount),
+      ]);
+
+      const total = (totalSnap && totalSnap.data && totalSnap.data().count) || 0;
+      const ex = (exSnap && exSnap.data && exSnap.data().count) || 0;
+      const legacy = (legacySnap && legacySnap.data && legacySnap.data().count) || 0;
+      const paidAmt = (paidSnap && paidSnap.data && paidSnap.data().count) || 0;
+
+      const pagados = paidAmt + legacy;
+      let pendientes = total - ex - pagados;
+      if (!Number.isFinite(pendientes) || pendientes < 0) pendientes = 0;
+
+      setGlobalCounts({ total, exentos: ex, legacy, pagados, pendientes, loading: false });
+      setTotalCount(total);
+    } catch (err) {
+      console.warn('Could not fetch global counts', err);
+      setGlobalCounts({ total: null, pagados: null, pendientes: null, exentos: null, legacy: null, loading: false });
+    }
+  }, [costoCongreso]);
+
+  // Fetch initial aggregated counts and refresh when user or cost changes
+  useEffect(() => {
+    let canceled = false;
+    (async () => {
+      if (!user) return;
+      try {
+        await doFetchGlobalCounts();
+      } catch (err) {
+        if (!canceled) console.warn('Could not fetch global counts', err);
+      }
+    })();
+    return () => { canceled = true; };
+  }, [user, costoCongreso, doFetchGlobalCounts]);
 
   useEffect(() => {
     // only subscribe when we have an authenticated user
@@ -39,8 +93,14 @@ export function ParticipantsProvider({ children }) {
       setLoading(false);
       return;
     }
+    // Only keep a realtime subscription for the first page. When viewing other pages
+    // we fetch via `loadPage` to avoid the snapshot overwriting paged results.
+    if (activePage !== 1) {
+      // if not on first page, ensure loading is false and avoid subscribing
+      setLoading(false);
+      return;
+    }
 
-    setLoading(true);
     const col = collection(getDb(), 'participantes');
     const q = firestoreQuery(col, orderBy('timestamp', 'desc'), firestoreLimit(PAGE_SIZE));
     const unsubscribe = onSnapshot(
@@ -58,6 +118,8 @@ export function ParticipantsProvider({ children }) {
             const countQuery = firestoreQuery(collection(getDb(), 'participantes'));
             const snapshotCount = await getCountFromServer(countQuery);
             setTotalCount(snapshotCount.data().count || 0);
+            // refresh aggregated counts as well
+            try { await doFetchGlobalCounts(); } catch (_) {}
           } catch (e) {
             console.warn('could not fetch total count', e);
             setTotalCount(null);
@@ -79,7 +141,7 @@ export function ParticipantsProvider({ children }) {
     );
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, activePage, doFetchGlobalCounts]);
 
   const addParticipant = async (data) => {
     // optimistic add: append local entry until server snapshot arrives
@@ -88,6 +150,7 @@ export function ParticipantsProvider({ children }) {
     setParticipants((cur) => [...cur, localDoc]);
     try {
       const ref = await addDoc(collection(getDb(), 'participantes'), data);
+      try { await doFetchGlobalCounts(); } catch (_) {}
       return { id: ref.id };
     } catch (err) {
       console.error('addParticipant error', err);
@@ -104,6 +167,7 @@ export function ParticipantsProvider({ children }) {
     try {
       const ref = doc(getDb(), 'participantes', id);
       await updateDoc(ref, data);
+      try { await doFetchGlobalCounts(); } catch (_) {}
     } catch (err) {
       console.error('updateParticipant error', err);
       // revert
@@ -118,6 +182,7 @@ export function ParticipantsProvider({ children }) {
     setParticipants((cur) => cur.filter((p) => p.id !== id));
     try {
       await deleteDoc(doc(getDb(), 'participantes', id));
+      try { await doFetchGlobalCounts(); } catch (_) {}
     } catch (err) {
       console.error('deleteParticipant error', err);
       // revert
@@ -128,6 +193,7 @@ export function ParticipantsProvider({ children }) {
 
   const refresh = async () => {
     try {
+      setActivePage(1);
       setLoading(true);
       const col = collection(getDb(), 'participantes');
       const snapshot = await getDocs(firestoreQuery(col, orderBy('timestamp', 'desc'), firestoreLimit(PAGE_SIZE)));
@@ -169,6 +235,7 @@ export function ParticipantsProvider({ children }) {
 
   const loadPage = async (pageNumber) => {
     if (!user) return;
+    setActivePage(pageNumber);
     const skip = Math.max(0, (pageNumber - 1) * PAGE_SIZE);
     try {
       setLoading(true);
@@ -179,10 +246,11 @@ export function ParticipantsProvider({ children }) {
       const q = firestoreQuery(col, orderBy('timestamp', 'desc'), firestoreLimit(limitCount));
       const snapshot = await getDocs(q);
       const allRows = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      const pageRows = allRows.slice(Math.max(0, allRows.length - PAGE_SIZE));
+      const pageRows = allRows.slice(skip, skip + PAGE_SIZE);
       setParticipants(pageRows);
       setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
-      setHasMore(pageRows.length === PAGE_SIZE);
+      // if we requested limitCount and received exactly that many docs, there may be more pages
+      setHasMore(snapshot.docs.length === limitCount);
       setError('');
     } catch (err) {
       console.error('loadPage participants error', err);
@@ -194,7 +262,7 @@ export function ParticipantsProvider({ children }) {
 
   return (
     <ParticipantsContext.Provider
-      value={{ participants, loading, error, addParticipant, updateParticipant, deleteParticipant, refresh, loadMore, loadPage, hasMore, loadingMore, totalCount }}
+      value={{ participants, loading, error, addParticipant, updateParticipant, deleteParticipant, refresh, loadMore, loadPage, hasMore, loadingMore, totalCount, globalCounts }}
     >
       {children}
     </ParticipantsContext.Provider>

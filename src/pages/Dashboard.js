@@ -19,6 +19,7 @@ import {
   TableRow,
   TextField,
   Typography,
+  Skeleton,
 } from "@mui/material";
 import LogoutIcon from "@mui/icons-material/Logout";
 import EditIcon from "@mui/icons-material/Edit";
@@ -199,7 +200,7 @@ function getTipoRegistro(participant) {
 }
 
 export default function Dashboard() {
-  const { participants: data, loading: loadingData, error: dataError, deleteParticipant, loadPage, loadingMore, totalCount } = useParticipants();
+  const participantsCtx = useParticipants();
   const { config } = useConfig();
   const [filtro, setFiltro] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
@@ -212,6 +213,20 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const auth = getAuth();
   const { user, isAdmin } = useAuth();
+
+  if (!participantsCtx || typeof participantsCtx !== 'object') {
+    console.error('useParticipants returned invalid context in Dashboard:', participantsCtx);
+  }
+  const {
+    participants: data = [],
+    loading: loadingData = false,
+    error: dataError = '',
+    deleteParticipant = async () => {},
+    loadPage = async () => {},
+    loadingMore = false,
+    totalCount = null,
+    globalCounts = { total: null, pagados: null, pendientes: null, exentos: null, legacy: null, loading: false },
+  } = participantsCtx || {};
 
   // participants are provided in real-time by ParticipantsProvider
 
@@ -344,7 +359,7 @@ export default function Dashboard() {
       return 0;
     });
 
-  const totalParticipantes = data.length;
+  
   const pendientesList = data.filter(
     (participant) => getParticipantPaymentStatus(participant, costoCongreso).key === "pendiente"
   );
@@ -357,8 +372,19 @@ export default function Dashboard() {
   ).length;
   const pendientes = pendientesList.length;
 
+  // `globalCounts` is provided by ParticipantsContext
+
+  const totalParticipantes = typeof globalCounts.total === 'number' && globalCounts.total > 0
+    ? globalCounts.total
+    : (typeof totalCount === 'number' && totalCount > 0 ? totalCount : data.length);
+
+  const visibleRows = (typeof globalCounts.total === 'number' && globalCounts.total > 0) || (typeof totalCount === 'number' && totalCount > 0)
+    ? datosFiltrados
+    : datosFiltrados.slice((currentPage - 1) * UI_PAGE_SIZE, (currentPage - 1) * UI_PAGE_SIZE + UI_PAGE_SIZE);
+
   // Pagination helpers for MUI Pagination control using provider's server-side page loader.
-  const pageCount = totalCount ? Math.max(1, Math.ceil(totalCount / UI_PAGE_SIZE)) : Math.max(1, Math.ceil(data.length / UI_PAGE_SIZE));
+  const effectiveTotal = typeof globalCounts.total === 'number' && globalCounts.total > 0 ? globalCounts.total : (typeof totalCount === 'number' && totalCount > 0 ? totalCount : data.length);
+  const pageCount = Math.max(1, Math.ceil(effectiveTotal / UI_PAGE_SIZE));
 
   useEffect(() => {
     if (currentPage > pageCount) setCurrentPage(pageCount);
@@ -382,7 +408,7 @@ export default function Dashboard() {
       title: "Total registrados",
       icon: <PeopleOutlineIcon fontSize="small" />,
       value: totalParticipantes,
-      caption: "Base completa",
+      caption: typeof globalCounts.total === 'number' && globalCounts.total > 0 ? `Base: ${data.length} en esta página · ${globalCounts.total} total` : (typeof totalCount === 'number' && totalCount > 0 ? `Base: ${data.length} en esta página · ${totalCount} total` : "Base completa"),
       backgroundColor: "#00492F",
       color: "#F7F3E8",
       borderColor: "#00492F",
@@ -391,8 +417,8 @@ export default function Dashboard() {
       key: "pagado",
       title: "Pagados",
       icon: <AttachMoneyIcon fontSize="small" />,
-      value: pagados,
-      caption: legacyPaidCount > 0 ? `Incluye ${legacyPaidCount} legacy` : "Pago completo o mayor",
+      value: typeof globalCounts.pagados === 'number' ? globalCounts.pagados : pagados,
+      caption: typeof globalCounts.pagados === 'number' ? (globalCounts.legacy > 0 ? `Incluye ${globalCounts.legacy} legacy` : "Pago completo o mayor") : (legacyPaidCount > 0 ? `Incluye ${legacyPaidCount} legacy` : "Pago completo o mayor"),
       backgroundColor: "#046552",
       color: "#F7F3E8",
       borderColor: "#046552",
@@ -401,7 +427,7 @@ export default function Dashboard() {
       key: "pendiente",
       title: "Pendientes",
       icon: <PendingActionsIcon fontSize="small" />,
-      value: pendientes,
+      value: typeof globalCounts.pendientes === 'number' ? globalCounts.pendientes : pendientes,
       caption: "Requieren seguimiento",
       backgroundColor: "#FFBC00",
       color: "#1E1E1E",
@@ -411,7 +437,7 @@ export default function Dashboard() {
       key: "exento",
       title: "Exentos",
       icon: <LabelImportantIcon fontSize="small" />,
-      value: exentos.length,
+      value: typeof globalCounts.exentos === 'number' ? globalCounts.exentos : exentos.length,
       caption: "Sin cobro requerido",
       backgroundColor: "#EEE8D8",
       color: "#16302A",
@@ -584,15 +610,24 @@ export default function Dashboard() {
                     <Typography variant="overline" sx={{ opacity: 0.9 }}>
                       {card.title}
                     </Typography>
-                    <Typography
-                      variant="h3"
-                      sx={{ fontSize: { xs: 28, md: 42 }, lineHeight: 1 }}
-                    >
-                      {card.value}
-                    </Typography>
-                    <Typography variant="body2" sx={{ opacity: 0.9, fontSize: { xs: 12, md: 14 } }}>
-                      {card.caption}
-                    </Typography>
+                    {globalCounts && globalCounts.loading ? (
+                      <>
+                        <Skeleton variant="text" width={160} height={48} />
+                        <Skeleton variant="text" width={200} />
+                      </>
+                    ) : (
+                      <>
+                        <Typography
+                          variant="h3"
+                          sx={{ fontSize: { xs: 28, md: 42 }, lineHeight: 1 }}
+                        >
+                          {card.value}
+                        </Typography>
+                        <Typography variant="body2" sx={{ opacity: 0.9, fontSize: { xs: 12, md: 14 } }}>
+                          {card.caption}
+                        </Typography>
+                      </>
+                    )}
                   </Paper>
                 );
               })}
@@ -865,9 +900,7 @@ export default function Dashboard() {
                 )}
               </Paper>
             ) : (
-              datosFiltrados
-                .slice((currentPage - 1) * UI_PAGE_SIZE, (currentPage - 1) * UI_PAGE_SIZE + UI_PAGE_SIZE)
-                .map((participant) => {
+              visibleRows.map((participant) => {
                   const status = getParticipantStatus(participant, costoCongreso);
                   const paymentStatus = getParticipantPaymentStatus(participant, costoCongreso);
                   const paymentLabel = participant.pago
@@ -977,9 +1010,7 @@ export default function Dashboard() {
                   </TableRow>
                 ) : (
                   (() => {
-                    const start = (currentPage - 1) * UI_PAGE_SIZE;
-                    const end = start + UI_PAGE_SIZE;
-                    return datosFiltrados.slice(start, end).map((p) => {
+                    return visibleRows.map((p) => {
                     const status = getParticipantStatus(p, costoCongreso);
                     const paymentStatus = getParticipantPaymentStatus(p, costoCongreso);
 
@@ -1073,7 +1104,7 @@ export default function Dashboard() {
             gap={1.5}
           >
             <Typography variant="body2" color="text.secondary">
-              {pendientesList.length} pendientes, {exentos.length} exentos y {legacyPaidCount} legacy en total.
+              {typeof globalCounts.pendientes === 'number' ? globalCounts.pendientes : pendientesList.length} pendientes, {typeof globalCounts.exentos === 'number' ? globalCounts.exentos : exentos.length} exentos y {typeof globalCounts.legacy === 'number' ? globalCounts.legacy : legacyPaidCount} legacy en total.
             </Typography>
             <Box display="flex" alignItems="center" gap={1}>
               {pageCount > 1 && (
