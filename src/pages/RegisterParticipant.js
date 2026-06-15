@@ -111,6 +111,8 @@ export default function RegisterParticipant() {
 
       await addParticipant({
         ...participantToSave,
+        talla: participantToSave.talla || "",
+        iglesia: participantToSave.iglesia || {},
         pago,
         montoPagado: isExento ? 0 : montoTotal,
         excedente: isExento ? 0 : excedente,

@@ -165,7 +165,7 @@ export function buildPaymentLine({
     amountOriginal: originalAmount,
     amountUsd,
     exchangeRate: currency === "bs" ? Number(exchangeRate) || 0 : 0,
-    reference: method?.requiereReferencia ? reference || "" : "",
+    reference: reference || "",
     zelleInfo: method?.requiereZelleInfo ? zelleInfo || "" : "",
   };
 }
@@ -244,4 +244,69 @@ export function subscribeAppConfig(callback) {
     setTimeout(() => callback(err), 0);
     return () => {};
   }
+}
+
+export function getParticipantPaidUsd(participant, exchangeRate) {
+  if (!participant) return 0;
+  // legacy-like check: pago true but no montoPagado should be treated as 0 here
+  const monto = Number(participant.montoPagado) || 0;
+  if (participant?.pago && monto === 0) return 0;
+
+  // prefer pagosDetalle structured lines
+  try {
+    if (Array.isArray(participant.pagosDetalle) && participant.pagosDetalle.length > 0) {
+      return participant.pagosDetalle.reduce((acc, line) => {
+        const amt = Number(line?.amountOriginal || line?.amount || 0) || 0;
+        const currency = (line?.currency || line?.divisa || "").toString().toLowerCase();
+        return acc + normalizeAmountByCurrency(amt, currency === 'bs' ? 'bs' : '$', exchangeRate);
+      }, 0);
+    }
+
+    // fallback to legacy fields
+    const legacyAmt = Number(participant.montoPagado || participant.montoOriginalPago || participant.montoPagado2 || participant.montoOriginalPago2) || 0;
+    const moneda = (participant.monedaPago || participant.monedaPago2 || "").toString().toLowerCase();
+    return normalizeAmountByCurrency(legacyAmt, moneda && moneda.includes('bs') ? 'bs' : '$', exchangeRate);
+  } catch (e) {
+    return 0;
+  }
+}
+
+export function computeFinancialSummary(participants = [], eventCostUsd = 0, exchangeRate = 0) {
+  const totalParticipants = participants.length;
+  let exentosCount = 0;
+  let pagadosCount = 0;
+  let pendientesCount = 0;
+  let montoPagadoTotal = 0;
+  let excedenteTotal = 0;
+
+  participants.forEach((p) => {
+    const paid = getParticipantPaidUsd(p, exchangeRate);
+    const status = getParticipantPaymentStatus(p, eventCostUsd);
+    // treat legacy (pago true + monto 0) as exento
+    const isLegacy = status.isLegacyPaid;
+    if (p.exento || isLegacy) {
+      exentosCount += 1;
+      return;
+    }
+
+    montoPagadoTotal += paid;
+    if (status.key === 'pagado') pagadosCount += 1;
+    else if (status.key === 'pendiente') pendientesCount += 1;
+
+    if (paid > eventCostUsd) excedenteTotal += paid - eventCostUsd;
+  });
+
+  const montoTotalAlcanzable = Math.max(0, (totalParticipants - exentosCount) * eventCostUsd);
+  const montoPendiente = Math.max(0, montoTotalAlcanzable - montoPagadoTotal);
+
+  return {
+    totalParticipants,
+    exentosCount,
+    pagadosCount,
+    pendientesCount,
+    montoPagadoTotal,
+    excedenteTotal,
+    montoTotalAlcanzable,
+    montoPendiente,
+  };
 }

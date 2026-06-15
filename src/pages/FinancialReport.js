@@ -43,7 +43,7 @@ export default function FinancialReport() {
   const navigate = useNavigate();
   const { isAdmin, loading: authLoading } = useAuth();
 
-  const { participants: data, loading: loadingData, error: dataError } = useParticipants();
+  const { participants: data, loading: loadingData, error: dataError, totalCount, globalCounts } = useParticipants();
   const { config } = useConfig();
   const [tasaBCV, setTasaBCV] = useState(null);
   const [loadingTasa, setLoadingTasa] = useState(true);
@@ -122,50 +122,86 @@ export default function FinancialReport() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
-
-  const totalParticipantes = data.length;
+  const effectiveTotal = typeof globalCounts?.total === 'number' && globalCounts.total > 0
+    ? globalCounts.total
+    : (typeof totalCount === 'number' && totalCount > 0 ? totalCount : data.length);
+  const totalParticipantes = effectiveTotal;
   const costoCongreso = getEventCost(config);
-  const montoTotal = totalParticipantes * costoCongreso;
-  const exentos = data.filter((participant) => participant.exento);
-  const legacyPaidParticipants = data.filter(
-    (participant) => getParticipantPaymentStatus(participant, costoCongreso).isLegacyPaid
-  );
-  const legacyPaidCount = legacyPaidParticipants.length;
-  const pagados = data.filter(
-    (participant) => getParticipantPaymentStatus(participant, costoCongreso).key === "pagado"
-  ).length;
-  const pendientes = data.filter(
-    (participant) => getParticipantPaymentStatus(participant, costoCongreso).key === "pendiente"
-  ).length;
-  const montoExentos = exentos.length * costoCongreso;
+
+  // Helper: determine if participant is a legacy record (pagado flag but no monto trazable)
+  const isLegacy = (participant) => getParticipantPaymentStatus(participant, costoCongreso).isLegacyPaid;
+
+  // Helper: compute paid amount in USD for a participant.
+  // - If participant is legacy, treat as 0 (we'll convert legacy to exento in calculations)
+  // - If participant has pagosDetalle, sum amounts (convert Bs to USD using tasaBCV when possible)
+  // - Fallback to legacy monto fields
+  const getPaidUsd = (participant) => {
+    if (!participant) return 0;
+    if (isLegacy(participant)) return 0;
+    let total = 0;
+    try {
+      if (Array.isArray(participant.pagosDetalle) && participant.pagosDetalle.length > 0) {
+        participant.pagosDetalle.forEach((p) => {
+          const amt = Number(p.amountOriginal || p.amount || 0) || 0;
+          const currency = (p.currency || p.divisa || "").toString().toLowerCase();
+          if (currency && currency.includes("bs")) {
+            total += tasaBCV ? amt / tasaBCV : 0;
+          } else {
+            total += amt;
+          }
+        });
+        return total;
+      }
+
+      // Fallback legacy-style fields
+      const monto = Number(participant.montoPagado || participant.montoOriginalPago || participant.montoPagado2 || participant.montoOriginalPago2) || 0;
+      const moneda = (participant.monedaPago || participant.monedaPago2 || "").toString().toLowerCase();
+      if (moneda && moneda.includes("bs")) {
+        return tasaBCV ? monto / tasaBCV : 0;
+      }
+      return monto;
+    } catch (e) {
+      return 0;
+    }
+  };
+
+  // Treat legacy participants as exentos for counting and calculations (per decision)
+  const exentos = data.filter((p) => p.exento || isLegacy(p));
+  const exentosCount = exentos.length;
+
+  // Recompute counts using legacy->exento rule
+  let pagadosCount = 0;
+  let pendientesCount = 0;
+  data.forEach((p) => {
+    if (isLegacy(p)) return; // counted as exento
+    const status = getParticipantPaymentStatus(p, costoCongreso);
+    if (status.key === "pagado") pagadosCount += 1;
+    else if (status.key === "pendiente") pendientesCount += 1;
+  });
+
+  const montoExentos = exentosCount * costoCongreso;
   const montoExentosBs = montoExentos * (tasaBCV || 0);
 
-  const montoRecaudadoSinExcedente = data.reduce((accumulator, participant) => {
-    if (getParticipantPaymentStatus(participant, costoCongreso).isLegacyPaid) {
-      return accumulator;
-    }
-    if (parseFloat(participant.montoPagado) > costoCongreso) {
-      return accumulator + costoCongreso;
-    }
-    return accumulator + (parseFloat(participant.montoPagado) || 0);
+  // Recaudado: suma real de montos pagados (sin truncar al costo)
+  const montoPagadoTotal = data.reduce((acc, participant) => acc + getPaidUsd(participant), 0);
+
+  // Excedente: suma de (paid - costo) cuando paid > costo
+  const excedenteTotal = data.reduce((acc, participant) => {
+    const paid = getPaidUsd(participant);
+    return acc + (paid > costoCongreso ? paid - costoCongreso : 0);
   }, 0);
 
-  const montoPagadoTotal = montoRecaudadoSinExcedente;
-  const excedenteTotal = data.reduce(
-    (accumulator, participant) =>
-      accumulator +
-      (parseFloat(participant.excedente) ||
-        (parseFloat(participant.montoPagado) > costoCongreso
-          ? parseFloat(participant.montoPagado) - costoCongreso
-          : 0)),
-    0
-  );
-  const montoPendiente = pendientes * costoCongreso;
-  const montoPendienteBs = montoPendiente * (tasaBCV || 0);
-  const montoPagadoTotalBs = montoPagadoTotal * (tasaBCV || 0);
-  const montoTotalAlcanzable = montoTotal - montoExentos;
+  // Potencial alcanzable: (total inscritos - exentos) * costo
+  const montoTotalAlcanzable = (totalParticipantes - exentosCount) * costoCongreso;
   const montoTotalAlcanzableBs = montoTotalAlcanzable * (tasaBCV || 0);
+
+  // Pendiente: potencial - recaudado (no negativo)
+  const montoPendiente = Math.max(0, montoTotalAlcanzable - montoPagadoTotal);
+  const montoPendienteBs = montoPendiente * (tasaBCV || 0);
+
+  const montoPagadoTotalBs = montoPagadoTotal * (tasaBCV || 0);
   const excedenteTotalBs = excedenteTotal * (tasaBCV || 0);
+  const legacyPaidCount = data.filter((p) => getParticipantPaymentStatus(p, costoCongreso).isLegacyPaid).length;
   const montoLegacyEstimado = legacyPaidCount * costoCongreso;
   const montoLegacyEstimadoBs = montoLegacyEstimado * (tasaBCV || 0);
 
@@ -179,27 +215,27 @@ export default function FinancialReport() {
     {
       label: "Inscritos",
       value: totalParticipantes,
-      helper: "Base",
+      helper: "Total de registros inscritos.",
       backgroundColor: "#00492F",
       color: "#F7F3E8",
     },
     {
       label: "Pagados",
-      value: pagados,
-      helper: legacyPaidCount > 0 ? `Incluye ${legacyPaidCount} legacy` : "Al dia",
+      value: typeof globalCounts?.pagados === 'number' ? globalCounts.pagados : pagadosCount,
+      helper: typeof globalCounts?.pagados === 'number' ? (globalCounts.legacy > 0 ? `Incluye ${globalCounts.legacy} legacy` : "Al dia") : (legacyPaidCount > 0 ? `Incluye ${legacyPaidCount} legacy` : "Al dia"),
       backgroundColor: "#046552",
       color: "#F7F3E8",
     },
     {
       label: "Pendientes",
-      value: pendientes,
+      value: typeof globalCounts?.pendientes === 'number' ? globalCounts.pendientes : pendientesCount,
       helper: "Por cobrar",
       backgroundColor: "#FFBC00",
       color: "#1E1E1E",
     },
     {
       label: "Exentos",
-      value: exentos.length,
+      value: typeof globalCounts?.exentos === 'number' ? globalCounts.exentos : exentosCount,
       helper: "Sin cobro",
       backgroundColor: "#EEE8D8",
       color: "#16302A",
@@ -301,7 +337,7 @@ export default function FinancialReport() {
                 Centro de reportes
               </Typography>
               <Typography variant="body1" color="text.secondary" sx={{ mt: 1, maxWidth: 720, fontSize: { xs: 14, md: 16 } }}>
-                Consulta el estado financiero y deja esta vista lista para nuevos reportes.
+                Consulta el estado financiero, deudas y otros indicadores relevantes.
               </Typography>
             </Box>
 
@@ -320,10 +356,7 @@ export default function FinancialReport() {
                 Valor base por participante: ${formatCurrency(costoCongreso)}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                Tasa BCV usada: {tasaBCV ? `Bs. ${formatCurrency(tasaBCV)}` : "No disponible"}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                Lista para nuevas pestañas sin cambiar la navegación principal.
+                Tasa BCV actual: {tasaBCV ? `Bs. ${formatCurrency(tasaBCV)}` : "No disponible"}
               </Typography>
               {legacyPaidCount > 0 && (
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
@@ -491,7 +524,7 @@ export default function FinancialReport() {
                       </Alert>
                     ) : tasaBCV ? (
                       <Alert severity="info" sx={{ borderRadius: 0 }}>
-                        Tasa BCV usada: Bs. {formatCurrency(tasaBCV)}
+                        Tasa BCV actual: Bs. {formatCurrency(tasaBCV)}
                       </Alert>
                     ) : (
                       <Alert severity="warning" sx={{ borderRadius: 0 }}>
@@ -502,9 +535,6 @@ export default function FinancialReport() {
                     <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 2.5 }, backgroundColor: "#F7F3E8" }}>
                       <Typography variant="overline" color="text.secondary">
                         Próximos reportes
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-                        Esta vista ya puede crecer sin romper la lectura general.
                       </Typography>
                     </Paper>
                   </Box>

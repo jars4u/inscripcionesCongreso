@@ -20,6 +20,11 @@ import {
   TextField,
   Typography,
   Skeleton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from "@mui/material";
 import LogoutIcon from "@mui/icons-material/Logout";
 import EditIcon from "@mui/icons-material/Edit";
@@ -45,7 +50,7 @@ import { useNavigate } from "react-router-dom";
 import { getAuth } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useParticipants } from "../contexts/ParticipantsContext";
-import { getEventCost, getParticipantPaymentStatus } from "../utils/paymentConfig";
+import { getEventCost, getParticipantPaymentStatus, computeFinancialSummary } from "../utils/paymentConfig";
 import { useConfig } from "../contexts/ConfigContext";
 
 const surfaceSx = {
@@ -233,19 +238,28 @@ export default function Dashboard() {
   // Config is provided by ConfigProvider via useConfig
 
   const eliminarParticipante = async (id) => {
-    // Se ha eliminado window.confirm para compatibilidad
-    if (window.confirm("¿Estás seguro de eliminar este participante?")) {
-      try {
-        await deleteParticipant(id);
-      } catch (error) {
-        console.error("Error al eliminar participante:", error);
-        // Reuse dataError from context when possible; show fallback message
-        const msg = error && error.code === "permission-denied"
-          ? "No hay permisos para eliminar participantes en la nueva base de datos."
-          : "No se pudo eliminar el participante.";
-        // Log and show alert via local error state isn't available; we console.error and rely on provider's `error`.
-        console.error(msg);
-      }
+    // Open confirm dialog instead (handled via state)
+    setConfirmTarget({ id, name: getDisplayName(data.find(p => p.id === id) || {}) });
+    setConfirmOpen(true);
+  };
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState(null);
+
+  const handleConfirmClose = () => {
+    setConfirmOpen(false);
+    setConfirmTarget(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmTarget || !confirmTarget.id) return handleConfirmClose();
+    const id = confirmTarget.id;
+    try {
+      await deleteParticipant(id);
+    } catch (error) {
+      console.error("Error al eliminar participante:", error);
+    } finally {
+      handleConfirmClose();
     }
   };
 
@@ -360,17 +374,11 @@ export default function Dashboard() {
     });
 
   
-  const pendientesList = data.filter(
-    (participant) => getParticipantPaymentStatus(participant, costoCongreso).key === "pendiente"
-  );
-  const legacyPaidCount = data.filter(
-    (participant) => getParticipantPaymentStatus(participant, costoCongreso).isLegacyPaid
-  ).length;
-  const exentos = data.filter((p) => p.exento);
-  const pagados = data.filter(
-    (participant) => getParticipantPaymentStatus(participant, costoCongreso).key === "pagado"
-  ).length;
-  const pendientes = pendientesList.length;
+  const summary = computeFinancialSummary(data, costoCongreso, 0);
+  const legacyPaidCount = data.filter((participant) => getParticipantPaymentStatus(participant, costoCongreso).isLegacyPaid).length;
+  const exentosCount = typeof globalCounts.exentos === 'number' ? globalCounts.exentos : summary.exentosCount;
+  const pagados = typeof globalCounts.pagados === 'number' ? globalCounts.pagados : summary.pagadosCount;
+  const pendientes = typeof globalCounts.pendientes === 'number' ? globalCounts.pendientes : summary.pendientesCount;
 
   // `globalCounts` is provided by ParticipantsContext
 
@@ -437,7 +445,7 @@ export default function Dashboard() {
       key: "exento",
       title: "Exentos",
       icon: <LabelImportantIcon fontSize="small" />,
-      value: typeof globalCounts.exentos === 'number' ? globalCounts.exentos : exentos.length,
+      value: typeof globalCounts.exentos === 'number' ? globalCounts.exentos : exentosCount,
       caption: "Sin cobro requerido",
       backgroundColor: "#EEE8D8",
       color: "#16302A",
@@ -485,6 +493,22 @@ export default function Dashboard() {
 
   return (
     <Container maxWidth="xl" sx={{ py: { xs: 1.5, md: 4 } }}>
+      <Dialog
+        open={confirmOpen}
+        onClose={handleConfirmClose}
+        aria-labelledby="confirm-delete-title"
+      >
+        <DialogTitle id="confirm-delete-title">Confirmar eliminación</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            ¿Estás seguro de eliminar a {confirmTarget?.name || 'este participante'}? Esta acción no se puede deshacer.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleConfirmClose}>Cancelar</Button>
+          <Button color="error" onClick={handleConfirmDelete}>Eliminar</Button>
+        </DialogActions>
+      </Dialog>
       <Box
         display="flex"
         flexDirection={{ xs: "column", lg: "row" }}
@@ -1104,7 +1128,7 @@ export default function Dashboard() {
             gap={1.5}
           >
             <Typography variant="body2" color="text.secondary">
-              {typeof globalCounts.pendientes === 'number' ? globalCounts.pendientes : pendientesList.length} pendientes, {typeof globalCounts.exentos === 'number' ? globalCounts.exentos : exentos.length} exentos y {typeof globalCounts.legacy === 'number' ? globalCounts.legacy : legacyPaidCount} legacy en total.
+              {typeof globalCounts.pendientes === 'number' ? globalCounts.pendientes : pendientes} pendientes, {typeof globalCounts.exentos === 'number' ? globalCounts.exentos : exentosCount} exentos y {typeof globalCounts.legacy === 'number' ? globalCounts.legacy : legacyPaidCount} legacy en total.
             </Typography>
             <Box display="flex" alignItems="center" gap={1}>
               {pageCount > 1 && (

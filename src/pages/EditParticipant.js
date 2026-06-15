@@ -6,7 +6,7 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import { Alert, Box, Container, Paper, Typography } from "@mui/material";
+import { Alert, Box, Container, Paper, Typography, Button, Menu, MenuItem } from "@mui/material";
 import { getDb } from "../firebase";
 import { useParticipants } from "../contexts/ParticipantsContext";
 import {
@@ -38,6 +38,7 @@ export default function EditParticipant() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [historialPagos, setHistorialPagos] = useState([]);
+  const [anchorElHist, setAnchorElHist] = useState(null);
   const [errores, setErrores] = useState({});
   const { participants, loading: participantsLoading, updateParticipant } = useParticipants();
 
@@ -127,9 +128,15 @@ export default function EditParticipant() {
           actividadFisica: { respuesta: false, detalle: "" },
         },
         tipoRegistro: data.tipoRegistro || (edadVal < 18 ? "Menor de edad" : "Participante"),
+        talla: data.talla || data.tallaFranela || "",
       });
       setExento(!!data.exento);
       setHistorialPagos(data.historialPagos || []);
+      // normalize pagos and also move legacy sirveMinisterio into iglesia.sirveMinisterio if present
+      if (data.sirveMinisterio && !data.iglesia?.sirveMinisterio) {
+        // attach legacy field to iglesia
+        setParticipant((prev) => ({ ...prev, iglesia: { ...prev.iglesia, sirveMinisterio: data.sirveMinisterio } }));
+      }
       setPagos(normalizePaymentsFromDoc(data));
     } catch (error) {
       console.error("Error al cargar participante desde participants context:", error);
@@ -189,6 +196,8 @@ export default function EditParticipant() {
       const normalizedParticipant = deepUppercase(p);
       let updateData = {
             ...normalizedParticipant,
+        talla: normalizedParticipant.talla || "",
+        iglesia: normalizedParticipant.iglesia || {},
             miembro: !!participant.iglesia?.miembro,
             bautizado: !!participant.iglesia?.bautizado,
             pago,
@@ -286,40 +295,38 @@ export default function EditParticipant() {
               </Typography>
             </Box>
 
-            <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 2 }, minWidth: { xs: "100%", lg: 340 }, backgroundColor: "#F7F3E8" }}>
-              <Typography variant="overline" color="text.secondary">
-                Historial de pagos
-              </Typography>
-              {historialPagos && historialPagos.length > 0 ? (
-                <Box sx={{ mt: 1.5, display: "grid", gap: 1 }}>
-                  {historialPagos.map((h, idx) => (
-                    <Box key={idx} sx={{ ...surfaceSx, p: 1.5, backgroundColor: "#FFFFFF" }}>
-                      <Typography variant="caption" color="text.secondary">
-                        {new Date(h.fecha).toLocaleString("es-VE", {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })}
-                      </Typography>
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        Monto: ${h.monto.toFixed(2)}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Tasa BCV: Bs. {h.tasaBCV
-                          ? h.tasaBCV.toLocaleString("de-DE", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })
-                          : "No disponible"}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Box>
-              ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-                  Aún no hay historial de pagos registrado para este participante.
-                </Typography>
-              )}
-            </Paper>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', minWidth: { xs: '100%', lg: 340 } }}>
+              <Button variant="outlined" onClick={(e) => setAnchorElHist(e.currentTarget)}>
+                Historial de pagos {historialPagos && historialPagos.length ? `(${historialPagos.length})` : ''}
+              </Button>
+              <Menu
+                anchorEl={anchorElHist}
+                open={Boolean(anchorElHist)}
+                onClose={() => setAnchorElHist(null)}
+                PaperProps={{ sx: { maxWidth: 520, p: 1 } }}
+              >
+                {historialPagos && historialPagos.length > 0 ? (
+                  historialPagos.map((h, idx) => (
+                    <MenuItem key={idx} onClick={() => setAnchorElHist(null)} sx={{ whiteSpace: 'normal', alignItems: 'flex-start' }}>
+                      <Box>
+                        <Typography variant="subtitle2">{new Date(h.fecha).toLocaleString('es-VE', { dateStyle: 'medium', timeStyle: 'short' })}</Typography>
+                        <Typography variant="body2">Monto: ${h.monto.toFixed(2)}</Typography>
+                        <Typography variant="body2" color="text.secondary">Tasa BCV: {h.tasaBCV ? `Bs. ${h.tasaBCV.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'No disponible'}</Typography>
+                        {Array.isArray(h.lineas) && h.lineas.length > 0 && (
+                          <Box sx={{ mt: 0.5 }}>
+                            {h.lineas.map((ln, i) => (
+                              <Typography key={i} variant="caption" color="text.secondary" sx={{ display: 'block' }}>{ln.methodName || ln.method || ''} {ln.reference ? `· ${ln.reference}` : ''} {ln.amountOriginal ? `· ${ln.amountOriginal}` : ''}</Typography>
+                            ))}
+                          </Box>
+                        )}
+                      </Box>
+                    </MenuItem>
+                  ))
+                ) : (
+                  <MenuItem disabled>Sin historial de pagos.</MenuItem>
+                )}
+              </Menu>
+            </Box>
           </Box>
         </Paper>
 

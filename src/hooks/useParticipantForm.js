@@ -41,7 +41,9 @@ const initialParticipantTemplate = {
     bautismo: "",
     visitante: "",
     cuantoTiempo: "",
+    sirveMinisterio: "",
   },
+  talla: "",
   campamento: {
     medicamentoDependiente: { respuesta: false, detalle: "" },
     alergicoAlimento: { respuesta: false, detalle: "" },
