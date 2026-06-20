@@ -269,11 +269,7 @@ export function ParticipantsProvider({ children }) {
         const filtered = allRows.filter((p) => {
           const haystack = `${p.nombres || ''} ${p.apellidos || ''} ${p.ci || p.cedula || ''} ${p.email || ''}`.toLowerCase();
           if (!haystack.includes(qLower)) return false;
-          // apply additional server-side like filters if provided
-          if (statusFilter && statusFilter !== 'todos') {
-            // compute payment status locally as provider has costoCongreso
-            const paymentStatus = getEventCost ? null : null; // placeholder
-          }
+          // Note: additional filters like statusFilter are not applied in this bounded-search mode.
           return true;
         });
 

@@ -639,47 +639,61 @@ export default function FinancialReport() {
                         <CircularProgress size={20} />
                         <Typography>Cargando abonos de todos los participantes...</Typography>
                       </Box>
-                    ) : filteredPaidParticipants.length === 0 ? (
-                      <Typography>No hay abonos trazables para mostrar.</Typography>
                     ) : (
-                      <List>
-                        {filteredPaidParticipants.map(({ p, paidUsd, paidBs }) => (
-                          <React.Fragment key={p.id || p._id || p.email || `${p.nombres || ""} ${p.apellidos || ""}`.trim() || Math.random()}>
-                            <ListItem alignItems="flex-start">
-                              <ListItemText
-                                primary={
-                                  <Box display="flex" justifyContent="space-between" alignItems="center">
-                                    <span>{(`${p.nombres || ""} ${p.apellidos || ""}`.trim() || p.name || p.email || "(sin nombre)")}</span>
-                                    <Typography component="span" sx={{ fontWeight: 600 }}>
-                                      {'$'}{formatCurrency(paidUsd)} USD
-                                    </Typography>
-                                  </Box>
-                                }
-                                secondary={
-                                  <>
-                                    {Array.isArray(p.pagosDetalle) && p.pagosDetalle.length > 0 && (
-                                      <div style={{ marginTop: 6 }}>
-                                        <strong>Abonos:</strong>
-                                        {p.pagosDetalle.map((pay, i) => {
-                                          const amt = Number(pay.amountOriginal || pay.amount || 0) || 0;
-                                          const currency = (pay.currency || pay.divisa || "").toString().toLowerCase();
-                                          const amtUsd = currency && currency.includes("bs") ? (tasaBCV ? amt / tasaBCV : 0) : amt;
-                                          return (
-                                            <div key={i}>
-                                              {i + 1}. {amt} {pay.currency || pay.divisa || (currency && currency.includes('bs') ? 'Bs' : 'USD')} — ${formatCurrency(amtUsd)}
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-                                  </>
-                                }
-                              />
-                            </ListItem>
-                            <Divider component="li" />
-                          </React.Fragment>
-                        ))}
-                      </List>
+                      <>
+                        <Box mb={2}>
+                          <TextField
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Buscar por nombre o email"
+                            size="small"
+                            fullWidth
+                          />
+                        </Box>
+
+                        {filteredPaidParticipants.length === 0 ? (
+                          <Typography>No hay abonos trazables para mostrar.</Typography>
+                        ) : (
+                          <List>
+                            {filteredPaidParticipants.map(({ p, paidUsd }) => (
+                              <React.Fragment key={p.id || p._id || p.email || `${p.nombres || ""} ${p.apellidos || ""}`.trim() || Math.random()}>
+                                <ListItem alignItems="flex-start">
+                                  <ListItemText
+                                    primary={
+                                      <Box display="flex" justifyContent="space-between" alignItems="center">
+                                        <span>{(`${p.nombres || ""} ${p.apellidos || ""}`.trim() || p.name || p.email || "(sin nombre)")}</span>
+                                        <Typography component="span" sx={{ fontWeight: 600 }}>
+                                          {'$'}{formatCurrency(paidUsd)} USD
+                                        </Typography>
+                                      </Box>
+                                    }
+                                    secondary={
+                                      <>
+                                        {Array.isArray(p.pagosDetalle) && p.pagosDetalle.length > 0 && (
+                                          <div style={{ marginTop: 6 }}>
+                                            <strong>Abonos:</strong>
+                                            {p.pagosDetalle.map((pay, i) => {
+                                              const amt = Number(pay.amountOriginal || pay.amount || 0) || 0;
+                                              const currency = (pay.currency || pay.divisa || "").toString().toLowerCase();
+                                              const amtUsd = currency && currency.includes("bs") ? (tasaBCV ? amt / tasaBCV : 0) : amt;
+                                              return (
+                                                <div key={i}>
+                                                  {i + 1}. {amt} {pay.currency || pay.divisa || (currency && currency.includes('bs') ? 'Bs' : 'USD')} — ${formatCurrency(amtUsd)}
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </>
+                                    }
+                                  />
+                                </ListItem>
+                                <Divider component="li" />
+                              </React.Fragment>
+                            ))}
+                          </List>
+                        )}
+                      </>
                     )}
                   </DialogContent>
                   <DialogActions>
