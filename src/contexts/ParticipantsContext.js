@@ -239,15 +239,11 @@ export function ParticipantsProvider({ children }) {
     if (!user) return;
     let pageNumber = 1;
     let search = null;
-    let statusFilter = null;
-    let tipoFilter = null;
     if (typeof options === 'number') {
       pageNumber = options;
     } else if (options && typeof options === 'object') {
       pageNumber = options.pageNumber || options.page || 1;
       search = options.search || null;
-      statusFilter = options.statusFilter || options.status || null;
-      tipoFilter = options.tipoFilter || options.tipo || null;
     }
 
     setActivePage(pageNumber);
