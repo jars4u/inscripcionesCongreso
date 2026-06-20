@@ -46,7 +46,7 @@ import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import LabelImportantIcon from '@mui/icons-material/LabelImportant';
 // firestore operations handled by ParticipantsProvider
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { getAuth } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useParticipants } from "../contexts/ParticipantsContext";
@@ -212,7 +212,9 @@ export default function Dashboard() {
   const [tipoFilter, setTipoFilter] = useState("todos");
   const [sortColumn, setSortColumn] = useState("nombre");
   const [sortDirection, setSortDirection] = useState("asc");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const pageParam = parseInt(searchParams.get('page')) || 1;
+  const [currentPage, setCurrentPage] = useState(pageParam);
   const UI_PAGE_SIZE = 50;
 
   const navigate = useNavigate();
@@ -297,12 +299,21 @@ export default function Dashboard() {
     );
   };
 
-  // Reset UI page when filters or sorting change. We intentionally don't include
-  // `currentPage` in deps because we want to force page 1 on filter change.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Sync URL page param when filters change: reset to page 1 and include search/filters
   useEffect(() => {
-    setCurrentPage(1);
+    const params = {};
+    if (filtro) params.search = filtro;
+    if (statusFilter && statusFilter !== 'todos') params.status = statusFilter;
+    if (tipoFilter && tipoFilter !== 'todos') params.tipo = tipoFilter;
+    params.page = 1;
+    setSearchParams(params);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtro, statusFilter, tipoFilter, sortColumn, sortDirection]);
+
+  // Keep local currentPage in sync with URL
+  useEffect(() => {
+    setCurrentPage(pageParam);
+  }, [pageParam]);
 
   const costoCongreso = getEventCost(config);
 
@@ -399,16 +410,34 @@ export default function Dashboard() {
   }, [pageCount, currentPage]);
 
   const handlePageChange = async (_e, value) => {
-    setCurrentPage(value);
-    try {
-      if (typeof loadPage === 'function') await loadPage(value);
-    } catch (e) {
-      console.error('Error al cargar página:', e);
-    }
+    // update URL param; effect will trigger loadPage
+    const params = {};
+    if (filtro) params.search = filtro;
+    if (statusFilter && statusFilter !== 'todos') params.status = statusFilter;
+    if (tipoFilter && tipoFilter !== 'todos') params.tipo = tipoFilter;
+    params.page = value;
+    setSearchParams(params);
     try {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (_) {}
   };
+
+  // Trigger server-side page load when relevant params change
+  useEffect(() => {
+    const search = searchParams.get('search') || '';
+    const status = searchParams.get('status') || (statusFilter !== 'todos' ? statusFilter : null);
+    const tipo = searchParams.get('tipo') || (tipoFilter !== 'todos' ? tipoFilter : null);
+    const page = parseInt(searchParams.get('page')) || 1;
+    const opts = { pageNumber: page, search, statusFilter: status, tipoFilter: tipo, sortColumn, sortDirection };
+    (async () => {
+      try {
+        if (typeof loadPage === 'function') await loadPage(opts);
+      } catch (e) {
+        console.error('Error al cargar página (effect):', e);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, sortColumn, sortDirection]);
 
   const summaryCards = [
     {

@@ -11,8 +11,18 @@ import {
   Tab,
   Tabs,
   Typography,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemText,
+  TextField,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { getDb } from "../firebase";
+import { collection, getDocs, query as firestoreQuery, orderBy, limit as firestoreLimit } from "firebase/firestore";
 // participants are consumed from ParticipantsProvider
 import { useNavigate } from "react-router-dom";
 import { useParticipants } from "../contexts/ParticipantsContext";
@@ -48,10 +58,58 @@ export default function FinancialReport() {
   const [tasaBCV, setTasaBCV] = useState(null);
   const [loadingTasa, setLoadingTasa] = useState(true);
   const [activeTab, setActiveTab] = useState("financiero");
+  const [openRecaudadoDialog, setOpenRecaudadoDialog] = useState(false);
 
-  // Config provided by ConfigProvider
+  const openRecaudado = async () => {
+    setOpenRecaudadoDialog(true);
+    // fetch the full list in background
+    try {
+      await fetchAllPaidParticipants();
+    } catch (_) {}
+  };
+  const closeRecaudado = () => setOpenRecaudadoDialog(false);
+  const [paidParticipantsAll, setPaidParticipantsAll] = useState([]);
+  const [loadingPaidList, setLoadingPaidList] = useState(false);
 
-  // participants loaded in real-time by ParticipantsProvider; keep auth checks for UI if needed
+  const fetchAllPaidParticipants = async () => {
+    if (!isAdmin) return;
+    setLoadingPaidList(true);
+    try {
+      const col = collection(getDb(), 'participantes');
+      const limitCount = typeof totalCount === 'number' && totalCount > 0 ? totalCount : 5000;
+      const q = firestoreQuery(col, orderBy('timestamp', 'desc'), firestoreLimit(limitCount));
+      const snapshot = await getDocs(q);
+      const rows = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      const list = rows
+        .filter((p) => !isLegacy(p))
+        .map((p) => {
+          const paidUsd = getPaidUsd(p) || 0;
+          return { p, paidUsd, paidBs: paidUsd * (tasaBCV || 0) };
+        })
+        .filter((x) => x.paidUsd > 0);
+
+      setPaidParticipantsAll(list);
+    } catch (e) {
+      console.error('Error fetching all participants for paid list', e);
+      setPaidParticipantsAll([]);
+    } finally {
+      setLoadingPaidList(false);
+    }
+  };
+
+  // Load full paid participants list on mount for admins so totals reflect entire dataset
+  useEffect(() => {
+    if (authLoading || !isAdmin) return;
+    // fetch in background but don't block UI
+    (async () => {
+      try {
+        await fetchAllPaidParticipants();
+      } catch (_) {}
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, isAdmin, totalCount]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     if (authLoading || !isAdmin) {
@@ -205,6 +263,23 @@ export default function FinancialReport() {
   const montoLegacyEstimado = legacyPaidCount * costoCongreso;
   const montoLegacyEstimadoBs = montoLegacyEstimado * (tasaBCV || 0);
 
+  // Lista de participantes con abonos trazables (excluye legacy que se trata como exento)
+  const paidParticipants = data
+    .filter((p) => !isLegacy(p))
+    .map((p) => {
+      const paidUsd = getPaidUsd(p) || 0;
+      return { p, paidUsd, paidBs: paidUsd * (tasaBCV || 0) };
+    })
+    .filter((x) => x.paidUsd > 0);
+
+  const filteredPaidParticipants = (paidParticipantsAll.length > 0 ? paidParticipantsAll : paidParticipants).filter(({ p }) => {
+    const q = (searchTerm || "").trim().toLowerCase();
+    if (!q) return true;
+    const name = (`${p.nombres || ""} ${p.apellidos || ""}`.trim() || p.name || p.email || "").toLowerCase();
+    const email = (p.email || "").toLowerCase();
+    return name.includes(q) || email.includes(q);
+  });
+
   const reportTabs = [
     { value: "financiero", label: "Financiero" },
     { value: "cobranza", label: "Cobranza" },
@@ -245,8 +320,8 @@ export default function FinancialReport() {
   const financialCards = [
     {
       title: "Recaudado exacto",
-      usd: montoPagadoTotal,
-      bs: montoPagadoTotalBs,
+      usd: (paidParticipantsAll.length > 0 ? paidParticipantsAll.reduce((acc, x) => acc + (x.paidUsd || 0), 0) : montoPagadoTotal),
+      bs: (paidParticipantsAll.length > 0 ? paidParticipantsAll.reduce((acc, x) => acc + ((x.paidUsd || 0) * (tasaBCV || 0)), 0) : montoPagadoTotalBs),
       caption: "Solo pagos con monto trazable.",
     },
     {
@@ -464,7 +539,14 @@ export default function FinancialReport() {
                       }}
                     >
                       {financialCards.map((card) => (
-                        <Paper key={card.title} sx={moneyCardSx}>
+                        <Paper
+                          key={card.title}
+                          sx={{
+                            ...moneyCardSx,
+                            cursor: card.title === "Recaudado exacto" ? "pointer" : "default",
+                          }}
+                          onClick={card.title === "Recaudado exacto" ? openRecaudado : undefined}
+                        >
                           <Box>
                             <Typography variant="overline" color="text.secondary">
                               {card.title}
@@ -548,6 +630,62 @@ export default function FinancialReport() {
                 >
                   Volver al dashboard
                 </Button>
+
+                <Dialog open={openRecaudadoDialog} onClose={closeRecaudado} fullWidth maxWidth="md">
+                  <DialogTitle>Recaudado exacto — Detalle de abonos</DialogTitle>
+                  <DialogContent dividers>
+                    {loadingPaidList ? (
+                      <Box display="flex" alignItems="center" gap={2} p={2}>
+                        <CircularProgress size={20} />
+                        <Typography>Cargando abonos de todos los participantes...</Typography>
+                      </Box>
+                    ) : filteredPaidParticipants.length === 0 ? (
+                      <Typography>No hay abonos trazables para mostrar.</Typography>
+                    ) : (
+                      <List>
+                        {filteredPaidParticipants.map(({ p, paidUsd, paidBs }) => (
+                          <React.Fragment key={p.id || p._id || p.email || `${p.nombres || ""} ${p.apellidos || ""}`.trim() || Math.random()}>
+                            <ListItem alignItems="flex-start">
+                              <ListItemText
+                                primary={
+                                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                                    <span>{(`${p.nombres || ""} ${p.apellidos || ""}`.trim() || p.name || p.email || "(sin nombre)")}</span>
+                                    <Typography component="span" sx={{ fontWeight: 600 }}>
+                                      {'$'}{formatCurrency(paidUsd)} USD
+                                    </Typography>
+                                  </Box>
+                                }
+                                secondary={
+                                  <>
+                                    {Array.isArray(p.pagosDetalle) && p.pagosDetalle.length > 0 && (
+                                      <div style={{ marginTop: 6 }}>
+                                        <strong>Abonos:</strong>
+                                        {p.pagosDetalle.map((pay, i) => {
+                                          const amt = Number(pay.amountOriginal || pay.amount || 0) || 0;
+                                          const currency = (pay.currency || pay.divisa || "").toString().toLowerCase();
+                                          const amtUsd = currency && currency.includes("bs") ? (tasaBCV ? amt / tasaBCV : 0) : amt;
+                                          return (
+                                            <div key={i}>
+                                              {i + 1}. {amt} {pay.currency || pay.divisa || (currency && currency.includes('bs') ? 'Bs' : 'USD')} — ${formatCurrency(amtUsd)}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </>
+                                }
+                              />
+                            </ListItem>
+                            <Divider component="li" />
+                          </React.Fragment>
+                        ))}
+                      </List>
+                    )}
+                  </DialogContent>
+                  <DialogActions>
+                    <Button onClick={closeRecaudado}>Cerrar</Button>
+                  </DialogActions>
+                </Dialog>
               </Box>
             ) : (
               <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 3 }, backgroundColor: "#F7F3E8" }}>

@@ -233,15 +233,61 @@ export function ParticipantsProvider({ children }) {
     }
   };
 
-  const loadPage = async (pageNumber) => {
+  // loadPage supports either (pageNumber) or (options) where options may include
+  // { pageNumber, search, statusFilter, tipoFilter }
+  const loadPage = async (options) => {
     if (!user) return;
+    let pageNumber = 1;
+    let search = null;
+    let statusFilter = null;
+    let tipoFilter = null;
+    if (typeof options === 'number') {
+      pageNumber = options;
+    } else if (options && typeof options === 'object') {
+      pageNumber = options.pageNumber || options.page || 1;
+      search = options.search || null;
+      statusFilter = options.statusFilter || options.status || null;
+      tipoFilter = options.tipoFilter || options.tipo || null;
+    }
+
     setActivePage(pageNumber);
     const skip = Math.max(0, (pageNumber - 1) * PAGE_SIZE);
     try {
       setLoading(true);
       const col = collection(getDb(), 'participantes');
-      // Firestore doesn't expose a performant offset in all SDKs; use limit(skip + PAGE_SIZE)
-      // and then take the last PAGE_SIZE results. This is read-inefficient for large skips.
+
+      // If a search term is provided, perform a server-side assisted search.
+      // Firestore doesn't support full-text search across multiple fields in a single query,
+      // so we perform a bounded read (limit) and filter client-side. This is acceptable
+      // for moderate dataset sizes; for large datasets consider Algolia or Firestore-native indexes.
+      if (search && String(search).trim().length > 0) {
+        const qAll = firestoreQuery(col, orderBy('timestamp', 'desc'), firestoreLimit(5000));
+        const snapshot = await getDocs(qAll);
+        const allRows = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+        const qLower = String(search).trim().toLowerCase();
+        const filtered = allRows.filter((p) => {
+          const haystack = `${p.nombres || ''} ${p.apellidos || ''} ${p.ci || p.cedula || ''} ${p.email || ''}`.toLowerCase();
+          if (!haystack.includes(qLower)) return false;
+          // apply additional server-side like filters if provided
+          if (statusFilter && statusFilter !== 'todos') {
+            // compute payment status locally as provider has costoCongreso
+            const paymentStatus = getEventCost ? null : null; // placeholder
+          }
+          return true;
+        });
+
+        // paginate the filtered results client-side
+        const pageRows = filtered.slice(skip, skip + PAGE_SIZE);
+        setParticipants(pageRows);
+        setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
+        setHasMore(filtered.length > skip + PAGE_SIZE);
+        setTotalCount(filtered.length);
+        setError('');
+        return;
+      }
+
+      // No search: use the efficient page fetch strategy already in place
       const limitCount = skip + PAGE_SIZE;
       const q = firestoreQuery(col, orderBy('timestamp', 'desc'), firestoreLimit(limitCount));
       const snapshot = await getDocs(q);
