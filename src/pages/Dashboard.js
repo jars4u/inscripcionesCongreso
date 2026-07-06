@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Alert,
   Box,
@@ -216,6 +216,11 @@ export default function Dashboard() {
   const pageParam = parseInt(searchParams.get('page')) || 1;
   const [currentPage, setCurrentPage] = useState(pageParam);
   const UI_PAGE_SIZE = 50;
+  const SKELETON_ROWS = 8;
+  // Move keyboard focus onto the active summary card when the status filter
+  // changes (skips the initial mount so it doesn't steal focus on page load).
+  const activeCardRef = useRef(null);
+  const statusFilterMountedRef = useRef(false);
 
   const navigate = useNavigate();
   const auth = getAuth();
@@ -315,6 +320,21 @@ export default function Dashboard() {
     setCurrentPage(pageParam);
   }, [pageParam]);
 
+  // Focus the active summary card when the status filter changes (not on mount).
+  useEffect(() => {
+    if (!statusFilterMountedRef.current) {
+      statusFilterMountedRef.current = true;
+      return;
+    }
+    const node = activeCardRef.current;
+    if (!node) return;
+    try {
+      node.focus({ preventScroll: true });
+    } catch (_) {
+      node.focus();
+    }
+  }, [statusFilter]);
+
   const costoCongreso = getEventCost(config);
 
   const getField = (p, col) => {
@@ -397,12 +417,24 @@ export default function Dashboard() {
     ? globalCounts.total
     : (typeof totalCount === 'number' && totalCount > 0 ? totalCount : data.length);
 
-  const visibleRows = (typeof globalCounts.total === 'number' && globalCounts.total > 0) || (typeof totalCount === 'number' && totalCount > 0)
-    ? datosFiltrados
-    : datosFiltrados.slice((currentPage - 1) * UI_PAGE_SIZE, (currentPage - 1) * UI_PAGE_SIZE + UI_PAGE_SIZE);
+  // When any filter/search is active the provider holds the FULL dataset, so we
+  // filter (datosFiltrados) and paginate the COMPLETE matching set here. This
+  // keeps every match together on contiguous pages instead of scattering them
+  // across server pages. With no filters we keep efficient server-side paging.
+  const clientMode = Boolean(filtro) || statusFilter !== "todos" || tipoFilter !== "todos";
 
-  // Pagination helpers for MUI Pagination control using provider's server-side page loader.
-  const effectiveTotal = typeof globalCounts.total === 'number' && globalCounts.total > 0 ? globalCounts.total : (typeof totalCount === 'number' && totalCount > 0 ? totalCount : data.length);
+  const serverHasTotal = (typeof globalCounts.total === 'number' && globalCounts.total > 0) || (typeof totalCount === 'number' && totalCount > 0);
+  const visibleRows = clientMode
+    ? datosFiltrados.slice((currentPage - 1) * UI_PAGE_SIZE, (currentPage - 1) * UI_PAGE_SIZE + UI_PAGE_SIZE)
+    : (serverHasTotal
+        ? datosFiltrados
+        : datosFiltrados.slice((currentPage - 1) * UI_PAGE_SIZE, (currentPage - 1) * UI_PAGE_SIZE + UI_PAGE_SIZE));
+
+  // Pagination helpers for MUI Pagination control. In client mode the page count
+  // reflects the filtered result set; otherwise the provider's server-side total.
+  const effectiveTotal = clientMode
+    ? datosFiltrados.length
+    : (typeof globalCounts.total === 'number' && globalCounts.total > 0 ? globalCounts.total : (typeof totalCount === 'number' && totalCount > 0 ? totalCount : data.length));
   const pageCount = Math.max(1, Math.ceil(effectiveTotal / UI_PAGE_SIZE));
 
   useEffect(() => {
@@ -422,7 +454,10 @@ export default function Dashboard() {
     } catch (_) {}
   };
 
-  // Trigger server-side page load when relevant params change
+  // Trigger data loading when relevant params change. When a filter/search is
+  // active the provider loads the full dataset once and reuses it (see
+  // holdsFullRef in ParticipantsContext), so switching filters or turning pages
+  // within a filtered view does not re-fetch; the client filters & paginates it.
   useEffect(() => {
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status') || (statusFilter !== 'todos' ? statusFilter : null);
@@ -445,7 +480,7 @@ export default function Dashboard() {
       title: "Total registrados",
       icon: <PeopleOutlineIcon fontSize="small" />,
       value: totalParticipantes,
-      caption: typeof globalCounts.total === 'number' && globalCounts.total > 0 ? `Base: ${data.length} en esta página · ${globalCounts.total} total` : (typeof totalCount === 'number' && totalCount > 0 ? `Base: ${data.length} en esta página · ${totalCount} total` : "Base completa"),
+      caption: clientMode ? `${datosFiltrados.length} coinciden con el filtro` : (typeof globalCounts.total === 'number' && globalCounts.total > 0 ? `Base: ${data.length} en esta página · ${globalCounts.total} total` : (typeof totalCount === 'number' && totalCount > 0 ? `Base: ${data.length} en esta página · ${totalCount} total` : "Base completa")),
       backgroundColor: "#00492F",
       color: "#F7F3E8",
       borderColor: "#00492F",
@@ -651,13 +686,33 @@ export default function Dashboard() {
                 return (
                   <Paper
                     key={card.key}
+                    ref={isActive ? activeCardRef : null}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isActive}
+                    aria-label={`Filtrar por ${card.title}`}
                     onClick={() => toggleStatusFilter(card.key)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleStatusFilter(card.key);
+                      }
+                    }}
                     sx={{
                       ...metricTileBaseSx,
                       backgroundColor: card.backgroundColor,
                       color: card.color,
-                      border: "1px solid",
+                      border: "2px solid",
                       borderColor: isActive ? "#16302A" : card.borderColor,
+                      transform: isActive ? "translateY(-2px)" : "none",
+                      boxShadow: isActive
+                        ? "0 0 0 2px #16302A, 0 8px 20px rgba(0, 73, 47, 0.28)"
+                        : "none",
+                      outline: "none",
+                      "&:focus-visible": {
+                        borderColor: "#16302A",
+                        boxShadow: "0 0 0 3px rgba(22, 48, 42, 0.55)",
+                      },
                     }}
                   >
                     <Typography variant="overline" sx={{ opacity: 0.9 }}>
@@ -932,7 +987,25 @@ export default function Dashboard() {
           </Box>
 
           <Box sx={{ display: { xs: "grid", sm: "none" }, gap: 1 }}>
-            {datosFiltrados.length === 0 ? (
+            {loadingData ? (
+              Array.from({ length: SKELETON_ROWS }).map((_, i) => (
+                <Paper key={`sk-card-${i}`} sx={{ ...surfaceSx, p: 1.5 }}>
+                  <Box display="flex" justifyContent="space-between" gap={1.5}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Skeleton variant="text" width="60%" height={24} />
+                      <Skeleton variant="text" width="45%" />
+                      <Skeleton variant="text" width="50%" />
+                      <Skeleton variant="text" width="40%" />
+                    </Box>
+                    <Skeleton variant="rounded" width={72} height={36} />
+                  </Box>
+                  <Box display="flex" alignItems="center" justifyContent="space-between" mt={1.5}>
+                    <Skeleton variant="rounded" width={90} height={24} />
+                    <Skeleton variant="text" width={80} />
+                  </Box>
+                </Paper>
+              ))
+            ) : datosFiltrados.length === 0 ? (
               <Paper sx={{ ...surfaceSx, p: 2, textAlign: "center" }}>
                 <Typography variant="h6">Sin resultados</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
@@ -1039,7 +1112,36 @@ export default function Dashboard() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {datosFiltrados.length === 0 ? (
+                {loadingData ? (
+                  Array.from({ length: SKELETON_ROWS }).map((_, i) => (
+                    <TableRow key={`sk-row-${i}`} sx={{ "& td": { borderBottomColor: "#E4DDCE", py: 1.25 } }}>
+                      <TableCell sx={{ minWidth: { xs: 190, sm: 220 } }}>
+                        <Skeleton variant="text" width="70%" height={24} />
+                      </TableCell>
+                      <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+                        <Skeleton variant="text" width="80%" />
+                      </TableCell>
+                      <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                        <Skeleton variant="text" width="80%" />
+                      </TableCell>
+                      <TableCell sx={{ display: { xs: "none", lg: "table-cell" } }}>
+                        <Skeleton variant="text" width={32} />
+                      </TableCell>
+                      <TableCell sx={{ minWidth: 150 }}>
+                        <Skeleton variant="rounded" width={110} height={24} />
+                      </TableCell>
+                      <TableCell sx={{ display: { xs: "none", lg: "table-cell" } }}>
+                        <Skeleton variant="text" width="70%" />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.5 }}>
+                          <Skeleton variant="rounded" width={36} height={36} />
+                          <Skeleton variant="rounded" width={36} height={36} />
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : datosFiltrados.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} sx={{ py: 6, textAlign: "center" }}>
                       <Typography variant="h6">Sin resultados</Typography>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import {
   collection,
   onSnapshot,
@@ -33,6 +33,14 @@ export function ParticipantsProvider({ children }) {
   const [totalCount, setTotalCount] = useState(null);
   const [globalCounts, setGlobalCounts] = useState({ total: null, pagados: null, pendientes: null, exentos: null, legacy: null, loading: false });
   const [activePage, setActivePage] = useState(1);
+  // True while a filter/search is active and we are holding the full dataset for
+  // client-side filtering + pagination. Prevents the realtime page-1 subscription
+  // from overwriting that full dataset with just the first 50 rows.
+  const [filtersActive, setFiltersActive] = useState(false);
+  // Tracks whether `participants` currently holds the FULL (bounded) dataset vs a
+  // single server page. Lets loadPage skip a redundant full re-fetch when the user
+  // switches filters or turns pages within a filtered view (data already in memory).
+  const holdsFullRef = useRef(false);
 
   const { user } = useAuth();
   const { config } = useConfig();
@@ -94,8 +102,9 @@ export function ParticipantsProvider({ children }) {
       return;
     }
     // Only keep a realtime subscription for the first page. When viewing other pages
-    // we fetch via `loadPage` to avoid the snapshot overwriting paged results.
-    if (activePage !== 1) {
+    // (or while a filter/search holds the full dataset) we fetch via `loadPage` to
+    // avoid the snapshot overwriting paged/filtered results.
+    if (activePage !== 1 || filtersActive) {
       // if not on first page, ensure loading is false and avoid subscribing
       setLoading(false);
       return;
@@ -107,6 +116,7 @@ export function ParticipantsProvider({ children }) {
       q,
       (snapshot) => {
         const rows = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        holdsFullRef.current = false; // realtime view is only page 1
         setParticipants(rows);
         setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
         setHasMore(snapshot.docs.length === PAGE_SIZE);
@@ -141,7 +151,7 @@ export function ParticipantsProvider({ children }) {
     );
 
     return () => unsubscribe();
-  }, [user, activePage, doFetchGlobalCounts]);
+  }, [user, activePage, filtersActive, doFetchGlobalCounts]);
 
   const addParticipant = async (data) => {
     // optimistic add: append local entry until server snapshot arrives
@@ -198,6 +208,7 @@ export function ParticipantsProvider({ children }) {
       const col = collection(getDb(), 'participantes');
       const snapshot = await getDocs(firestoreQuery(col, orderBy('timestamp', 'desc'), firestoreLimit(PAGE_SIZE)));
       const rows = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      holdsFullRef.current = false;
       setParticipants(rows);
       setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
       setHasMore(snapshot.docs.length === PAGE_SIZE);
@@ -239,52 +250,61 @@ export function ParticipantsProvider({ children }) {
     if (!user) return;
     let pageNumber = 1;
     let search = null;
+    let statusFilter = null;
+    let tipoFilter = null;
     if (typeof options === 'number') {
       pageNumber = options;
     } else if (options && typeof options === 'object') {
       pageNumber = options.pageNumber || options.page || 1;
       search = options.search || null;
+      statusFilter = options.statusFilter && options.statusFilter !== 'todos' ? options.statusFilter : null;
+      tipoFilter = options.tipoFilter && options.tipoFilter !== 'todos' ? options.tipoFilter : null;
     }
 
+    const hasFilters = Boolean((search && String(search).trim().length > 0) || statusFilter || tipoFilter);
+
     setActivePage(pageNumber);
-    const skip = Math.max(0, (pageNumber - 1) * PAGE_SIZE);
+    setFiltersActive(hasFilters);
+
+    // When a filter is active and we already hold the full dataset in memory,
+    // there is nothing to fetch: switching filters or turning pages within a
+    // filtered view is handled entirely client-side. This applies equally to
+    // status, tipoRegistro and search filters (they all share the full dataset).
+    if (hasFilters && holdsFullRef.current) return;
+
     try {
       setLoading(true);
       const col = collection(getDb(), 'participantes');
 
-      // If a search term is provided, perform a server-side assisted search.
-      // Firestore doesn't support full-text search across multiple fields in a single query,
-      // so we perform a bounded read (limit) and filter client-side. This is acceptable
-      // for moderate dataset sizes; for large datasets consider Algolia or Firestore-native indexes.
-      if (search && String(search).trim().length > 0) {
-        const qAll = firestoreQuery(col, orderBy('timestamp', 'desc'), firestoreLimit(5000));
+      // A filter/search is active. Firestore can't express the derived
+      // payment-status / tipoRegistro filters (nor multi-field text search) as a
+      // single server query, so we load the full (bounded) dataset once and let
+      // the consumer filter + paginate the COMPLETE matching set client-side.
+      // This keeps every match together on contiguous pages instead of
+      // scattering them across server pages. Acceptable for moderate dataset
+      // sizes; for large datasets consider Algolia or Firestore-native indexes.
+      if (hasFilters) {
+        const limitCount = (typeof totalCount === 'number' && totalCount > 0) ? totalCount : 5000;
+        const qAll = firestoreQuery(col, orderBy('timestamp', 'desc'), firestoreLimit(limitCount));
         const snapshot = await getDocs(qAll);
         const allRows = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-        const qLower = String(search).trim().toLowerCase();
-        const filtered = allRows.filter((p) => {
-          const haystack = `${p.nombres || ''} ${p.apellidos || ''} ${p.ci || p.cedula || ''} ${p.email || ''}`.toLowerCase();
-          if (!haystack.includes(qLower)) return false;
-          // Note: additional filters like statusFilter are not applied in this bounded-search mode.
-          return true;
-        });
-
-        // paginate the filtered results client-side
-        const pageRows = filtered.slice(skip, skip + PAGE_SIZE);
-        setParticipants(pageRows);
-        setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
-        setHasMore(filtered.length > skip + PAGE_SIZE);
-        setTotalCount(filtered.length);
+        holdsFullRef.current = true;
+        setParticipants(allRows);
+        setLastVisible(null);
+        setHasMore(false);
+        setTotalCount(allRows.length);
         setError('');
         return;
       }
 
-      // No search: use the efficient page fetch strategy already in place
+      // No filters: use the efficient page fetch strategy already in place
+      const skip = Math.max(0, (pageNumber - 1) * PAGE_SIZE);
       const limitCount = skip + PAGE_SIZE;
       const q = firestoreQuery(col, orderBy('timestamp', 'desc'), firestoreLimit(limitCount));
       const snapshot = await getDocs(q);
       const allRows = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
       const pageRows = allRows.slice(skip, skip + PAGE_SIZE);
+      holdsFullRef.current = false;
       setParticipants(pageRows);
       setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
       // if we requested limitCount and received exactly that many docs, there may be more pages
