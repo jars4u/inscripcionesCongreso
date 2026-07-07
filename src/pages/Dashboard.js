@@ -9,6 +9,7 @@ import {
   Divider,
   IconButton,
   InputAdornment,
+  Link,
   LinearProgress,
   Paper,
   Pagination,
@@ -36,6 +37,7 @@ import PersonAddAltOutlinedIcon from "@mui/icons-material/PersonAddAltOutlined";
 import ArrowOutwardIcon from "@mui/icons-material/ArrowOutward";
 import SwapVertIcon from "@mui/icons-material/SwapVert";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import SearchIcon from '@mui/icons-material/Search';
 import PeopleOutlineIcon from '@mui/icons-material/PeopleOutline';
 import ChildCareIcon from '@mui/icons-material/ChildCare';
@@ -102,6 +104,19 @@ const statusStyles = {
   },
 };
 
+function normalizeWhatsappPhone(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("58")) return digits;
+  if (digits.startsWith("0")) return `58${digits.slice(1)}`;
+  return digits;
+}
+
+function getWhatsappUrl(phone) {
+  const normalized = normalizeWhatsappPhone(phone);
+  return normalized ? `https://wa.me/${normalized}` : "";
+}
+
 function getParticipantStatus(participant, costoCongreso) {
   const paymentStatus = getParticipantPaymentStatus(participant, costoCongreso);
   const monto = parseFloat(participant.montoPagado) || 0;
@@ -158,6 +173,38 @@ function getParticipantStatus(participant, costoCongreso) {
     shortLabel: "Pagado",
     sx: statusStyles.pagado,
   };
+}
+
+function PhoneLink({ phone }) {
+  const whatsappUrl = getWhatsappUrl(phone);
+
+  if (!phone) return "-";
+  if (!whatsappUrl) return phone;
+
+  return (
+    <Box
+      component={Link}
+      href={whatsappUrl}
+      target="_blank"
+      rel="noreferrer"
+      underline="none"
+      sx={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 0.5,
+        color: "#046552",
+        fontWeight: 600,
+        whiteSpace: "nowrap",
+        verticalAlign: "middle",
+        "&:hover": {
+          color: "#00492F",
+        },
+      }}
+    >
+      <WhatsAppIcon sx={{ fontSize: 16 }} />
+      <span>{phone}</span>
+    </Box>
+  );
 }
 
 const TIPO_OPTIONS = [
@@ -1046,7 +1093,7 @@ export default function Dashboard() {
                             Cédula: {participant.ci || participant.cedula || "Sin cédula"}
                           </Typography>
                           <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
-                            Teléfono: {participant.telefonoMovil || participant.telefonoFijo || participant.telefono || "-"}
+                            Teléfono: <PhoneLink phone={participant.telefonoMovil || participant.telefonoFijo || participant.telefono || ""} />
                           </Typography>
                           <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
                             Registro: {participant.registradoPor || "-"}
@@ -1197,7 +1244,7 @@ export default function Dashboard() {
                               Cédula: {p.ci || p.cedula || "Sin cédula"}
                             </Typography>
                             <Typography variant="caption" sx={{ display: { xs: "block", md: "none" } }}>
-                              Teléfono: {p.telefonoMovil || p.telefonoFijo || p.telefono || "-"}
+                              Teléfono: <PhoneLink phone={p.telefonoMovil || p.telefonoFijo || p.telefono || ""} />
                             </Typography>
                             <Typography variant="caption" sx={{ display: { xs: "block", lg: "none" } }}>
                               Registro: {p.registradoPor || "-"}
@@ -1208,7 +1255,7 @@ export default function Dashboard() {
                           {p.ci || p.cedula}
                         </TableCell>
                         <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
-                          {p.telefonoMovil || p.telefonoFijo || p.telefono}
+                          <PhoneLink phone={p.telefonoMovil || p.telefonoFijo || p.telefono || ""} />
                         </TableCell>
                         <TableCell sx={{ display: { xs: "none", lg: "table-cell" } }}>
                           {p.edad || "-"}
