@@ -32,6 +32,7 @@ import {
   getParticipantPaymentStatus,
 } from "../utils/paymentConfig";
 import { useConfig } from "../contexts/ConfigContext";
+import ParticipantExportCenter from "../components/ParticipantExportCenter";
 
 const surfaceSx = {
   backgroundColor: "#FFFFFF",
@@ -701,6 +702,13 @@ export default function FinancialReport() {
                   </DialogActions>
                 </Dialog>
               </Box>
+            ) : activeTab === "participacion" ? (
+              <ParticipantExportCenter
+                participants={data}
+                totalCount={totalCount}
+                costoCongreso={costoCongreso}
+                surfaceSx={surfaceSx}
+              />
             ) : (
               <Paper sx={{ ...surfaceSx, p: { xs: 1.5, md: 3 }, backgroundColor: "#F7F3E8" }}>
                 <Typography variant="h6">{reportTabs.find((tab) => tab.value === activeTab)?.label}</Typography>
