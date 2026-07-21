@@ -31,7 +31,7 @@ export function ParticipantsProvider({ children }) {
 
   const PAGE_SIZE = 50;
   const [totalCount, setTotalCount] = useState(null);
-  const [globalCounts, setGlobalCounts] = useState({ total: null, pagados: null, pendientes: null, exentos: null, legacy: null, loading: false });
+  const [globalCounts, setGlobalCounts] = useState({ total: null, pagados: null, pendientes: null, exentos: null, legacy: null, abonados: null, loading: false });
   const [activePage, setActivePage] = useState(1);
   // True while a filter/search is active and we are holding the full dataset for
   // client-side filtering + pagination. Prevents the realtime page-1 subscription
@@ -54,28 +54,35 @@ export function ParticipantsProvider({ children }) {
       const qExentos = firestoreQuery(col, where('exento', '==', true));
       const qLegacy = firestoreQuery(col, where('pago', '==', true), where('montoPagado', '==', 0));
       const qPaidWithAmount = firestoreQuery(col, where('montoPagado', '>=', Number(costoCongreso || 0)));
+      const qPartialPaid = firestoreQuery(
+        col,
+        where('montoPagado', '>', 0),
+        where('montoPagado', '<', Number(costoCongreso || 0))
+      );
 
-      const [totalSnap, exSnap, legacySnap, paidSnap] = await Promise.all([
+      const [totalSnap, exSnap, legacySnap, paidSnap, partialPaidSnap] = await Promise.all([
         getCountFromServer(qTotal),
         getCountFromServer(qExentos),
         getCountFromServer(qLegacy),
         getCountFromServer(qPaidWithAmount),
+        getCountFromServer(qPartialPaid),
       ]);
 
       const total = (totalSnap && totalSnap.data && totalSnap.data().count) || 0;
       const ex = (exSnap && exSnap.data && exSnap.data().count) || 0;
       const legacy = (legacySnap && legacySnap.data && legacySnap.data().count) || 0;
       const paidAmt = (paidSnap && paidSnap.data && paidSnap.data().count) || 0;
+      const abonados = (partialPaidSnap && partialPaidSnap.data && partialPaidSnap.data().count) || 0;
 
       const pagados = paidAmt + legacy;
       let pendientes = total - ex - pagados;
       if (!Number.isFinite(pendientes) || pendientes < 0) pendientes = 0;
 
-      setGlobalCounts({ total, exentos: ex, legacy, pagados, pendientes, loading: false });
+      setGlobalCounts({ total, exentos: ex, legacy, pagados, pendientes, abonados, loading: false });
       setTotalCount(total);
     } catch (err) {
       console.warn('Could not fetch global counts', err);
-      setGlobalCounts({ total: null, pagados: null, pendientes: null, exentos: null, legacy: null, loading: false });
+      setGlobalCounts({ total: null, pagados: null, pendientes: null, exentos: null, legacy: null, abonados: null, loading: false });
     }
   }, [costoCongreso]);
 

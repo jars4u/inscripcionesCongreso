@@ -47,6 +47,7 @@ import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import LabelImportantIcon from '@mui/icons-material/LabelImportant';
+import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined';
 // firestore operations handled by ParticipantsProvider
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getAuth } from "../firebase";
@@ -175,6 +176,13 @@ function getParticipantStatus(participant, costoCongreso) {
   };
 }
 
+function isAbonadoParticipant(participant, costoCongreso) {
+  const paymentStatus = getParticipantPaymentStatus(participant, costoCongreso);
+  const monto = Number(participant?.montoPagado) || 0;
+
+  return !participant?.exento && !paymentStatus.isLegacyPaid && monto > 0 && monto < costoCongreso;
+}
+
 function PhoneLink({ phone }) {
   const whatsappUrl = getWhatsappUrl(phone);
 
@@ -284,7 +292,7 @@ export default function Dashboard() {
     loadPage = async () => {},
     loadingMore = false,
     totalCount = null,
-    globalCounts = { total: null, pagados: null, pendientes: null, exentos: null, legacy: null, loading: false },
+    globalCounts = { total: null, pagados: null, pendientes: null, exentos: null, legacy: null, abonados: null, loading: false },
   } = participantsCtx || {};
 
   // participants are provided in real-time by ParticipantsProvider
@@ -425,7 +433,11 @@ export default function Dashboard() {
 
       // filtro por estado de pago (si aplica)
       if (statusFilter !== "todos") {
-        if (getParticipantStatus(participant, costoCongreso).key !== statusFilter) return false;
+        if (statusFilter === "abonado") {
+          if (!isAbonadoParticipant(participant, costoCongreso)) return false;
+        } else if (getParticipantStatus(participant, costoCongreso).key !== statusFilter) {
+          return false;
+        }
       }
 
       // filtro por tipoRegistro (si aplica)
@@ -454,6 +466,7 @@ export default function Dashboard() {
   
   const summary = computeFinancialSummary(data, costoCongreso, 0);
   const legacyPaidCount = data.filter((participant) => getParticipantPaymentStatus(participant, costoCongreso).isLegacyPaid).length;
+  const abonadosCount = data.filter((participant) => isAbonadoParticipant(participant, costoCongreso)).length;
   const exentosCount = typeof globalCounts.exentos === 'number' ? globalCounts.exentos : summary.exentosCount;
   const pagados = typeof globalCounts.pagados === 'number' ? globalCounts.pagados : summary.pagadosCount;
   const pendientes = typeof globalCounts.pendientes === 'number' ? globalCounts.pendientes : summary.pendientesCount;
@@ -551,6 +564,16 @@ export default function Dashboard() {
       backgroundColor: "#FFBC00",
       color: "#1E1E1E",
       borderColor: "#D7A100",
+    },
+    {
+      key: "abonado",
+      title: "Abonados",
+      icon: <PaymentsOutlinedIcon fontSize="small" />,
+      value: typeof globalCounts.abonados === 'number' ? globalCounts.abonados : abonadosCount,
+      caption: "Pago parcial registrado",
+      backgroundColor: "#C96F12",
+      color: "#FFF7ED",
+      borderColor: "#A95C10",
     },
     {
       key: "exento",
@@ -718,7 +741,7 @@ export default function Dashboard() {
                 gridTemplateColumns: {
                   xs: "repeat(2, minmax(0, 1fr))",
                   sm: "repeat(2, minmax(0, 1fr))",
-                  xl: "repeat(4, minmax(0, 1fr))",
+                  xl: "repeat(5, minmax(0, 1fr))",
                 },
                 gap: 1.5,
                 flex: 1,
@@ -762,9 +785,14 @@ export default function Dashboard() {
                       },
                     }}
                   >
-                    <Typography variant="overline" sx={{ opacity: 0.9 }}>
-                      {card.title}
-                    </Typography>
+                    <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
+                      <Typography variant="overline" sx={{ opacity: 0.9 }}>
+                        {card.title}
+                      </Typography>
+                      <Box component="span" sx={{ display: "inline-flex", opacity: 0.9 }}>
+                        {card.icon}
+                      </Box>
+                    </Box>
                     {globalCounts && globalCounts.loading ? (
                       <>
                         <Skeleton variant="text" width={160} height={48} />

@@ -11,6 +11,7 @@ import {
 const statusOptions = [
   { value: "todos", label: "Todos" },
   { value: "pagado", label: "Pagado" },
+  { value: "abonado", label: "Abonado" },
   { value: "pendiente", label: "Pendiente" },
   { value: "exento", label: "Exento" },
 ];

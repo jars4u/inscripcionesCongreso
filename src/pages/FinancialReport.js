@@ -99,9 +99,10 @@ export default function FinancialReport() {
     }
   };
 
-  // Load full paid participants list on mount for admins so totals reflect entire dataset
+  // Load full paid participants list once auth and exchange-rate resolution finish
+  // so Bs payments are converted consistently in global financial cards.
   useEffect(() => {
-    if (authLoading || !isAdmin) return;
+    if (authLoading || !isAdmin || loadingTasa) return;
     // fetch in background but don't block UI
     (async () => {
       try {
@@ -109,7 +110,7 @@ export default function FinancialReport() {
       } catch (_) {}
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, isAdmin, totalCount]);
+  }, [authLoading, isAdmin, totalCount, loadingTasa, tasaBCV]);
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
@@ -226,7 +227,7 @@ export default function FinancialReport() {
 
   // Treat legacy participants as exentos for counting and calculations (per decision)
   const exentos = data.filter((p) => p.exento || isLegacy(p));
-  const exentosCount = exentos.length;
+  const exentosCount = typeof globalCounts?.exentos === 'number' ? globalCounts.exentos : exentos.length;
 
   // Recompute counts using legacy->exento rule
   let pagadosCount = 0;
@@ -241,26 +242,30 @@ export default function FinancialReport() {
   const montoExentos = exentosCount * costoCongreso;
   const montoExentosBs = montoExentos * (tasaBCV || 0);
 
-  // Recaudado: suma real de montos pagados (sin truncar al costo)
-  const montoPagadoTotal = data.reduce((acc, participant) => acc + getPaidUsd(participant), 0);
-
-  // Excedente: suma de (paid - costo) cuando paid > costo
-  const excedenteTotal = data.reduce((acc, participant) => {
-    const paid = getPaidUsd(participant);
-    return acc + (paid > costoCongreso ? paid - costoCongreso : 0);
-  }, 0);
-
   // Potencial alcanzable: (total inscritos - exentos) * costo
   const montoTotalAlcanzable = (totalParticipantes - exentosCount) * costoCongreso;
   const montoTotalAlcanzableBs = montoTotalAlcanzable * (tasaBCV || 0);
+
+  const montoPagadoTotal = paidParticipantsAll.length > 0
+    ? paidParticipantsAll.reduce((acc, item) => acc + (item.paidUsd || 0), 0)
+    : data.reduce((acc, participant) => acc + getPaidUsd(participant), 0);
+  const montoPagadoTotalBs = montoPagadoTotal * (tasaBCV || 0);
+
+  const excedenteTotal = paidParticipantsAll.length > 0
+    ? paidParticipantsAll.reduce((acc, item) => acc + ((item.paidUsd || 0) > costoCongreso ? (item.paidUsd || 0) - costoCongreso : 0), 0)
+    : data.reduce((acc, participant) => {
+        const paid = getPaidUsd(participant);
+        return acc + (paid > costoCongreso ? paid - costoCongreso : 0);
+      }, 0);
+  const excedenteTotalBs = excedenteTotal * (tasaBCV || 0);
 
   // Pendiente: potencial - recaudado (no negativo)
   const montoPendiente = Math.max(0, montoTotalAlcanzable - montoPagadoTotal);
   const montoPendienteBs = montoPendiente * (tasaBCV || 0);
 
-  const montoPagadoTotalBs = montoPagadoTotal * (tasaBCV || 0);
-  const excedenteTotalBs = excedenteTotal * (tasaBCV || 0);
-  const legacyPaidCount = data.filter((p) => getParticipantPaymentStatus(p, costoCongreso).isLegacyPaid).length;
+  const legacyPaidCount = typeof globalCounts?.legacy === 'number'
+    ? globalCounts.legacy
+    : data.filter((p) => getParticipantPaymentStatus(p, costoCongreso).isLegacyPaid).length;
   const montoLegacyEstimado = legacyPaidCount * costoCongreso;
   const montoLegacyEstimadoBs = montoLegacyEstimado * (tasaBCV || 0);
 
@@ -321,8 +326,8 @@ export default function FinancialReport() {
   const financialCards = [
     {
       title: "Recaudado exacto",
-      usd: (paidParticipantsAll.length > 0 ? paidParticipantsAll.reduce((acc, x) => acc + (x.paidUsd || 0), 0) : montoPagadoTotal),
-      bs: (paidParticipantsAll.length > 0 ? paidParticipantsAll.reduce((acc, x) => acc + ((x.paidUsd || 0) * (tasaBCV || 0)), 0) : montoPagadoTotalBs),
+      usd: montoPagadoTotal,
+      bs: montoPagadoTotalBs,
       caption: "Solo pagos con monto trazable.",
     },
     {

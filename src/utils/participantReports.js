@@ -7,6 +7,7 @@ const YES_NO = {
 
 const PAYMENT_STATUS_LABELS = {
   pagado: "Pagado",
+  abonado: "Abonado",
   pendiente: "Pendiente",
   exento: "Exento",
 };
@@ -61,10 +62,28 @@ const compactAddress = (residencia = {}) =>
     .filter(Boolean)
     .join(", ");
 
-const buildPaymentStatusLabel = (participant, eventCostUsd) => {
+const getReportPaymentStatus = (participant, eventCostUsd) => {
   const status = getParticipantPaymentStatus(participant, eventCostUsd);
-  if (status?.isLegacyPaid) return "Pagado legacy";
-  return PAYMENT_STATUS_LABELS[status?.key] || "Sin definir";
+  const monto = Number(participant?.montoPagado) || 0;
+
+  if (!participant?.exento && !status?.isLegacyPaid && monto > 0 && monto < eventCostUsd) {
+    return {
+      key: "abonado",
+      label: PAYMENT_STATUS_LABELS.abonado,
+    };
+  }
+
+  if (status?.isLegacyPaid) {
+    return {
+      key: status.key,
+      label: "Pagado legacy",
+    };
+  }
+
+  return {
+    key: status?.key || "",
+    label: PAYMENT_STATUS_LABELS[status?.key] || "Sin definir",
+  };
 };
 
 const buildCampFlagValue = (field) => ({
@@ -155,6 +174,7 @@ export const getDefaultParticipantReportColumnIds = () =>
     .map((column) => column.id);
 
 export const buildParticipantReportRow = (participant, eventCostUsd) => {
+  const reportPaymentStatus = getReportPaymentStatus(participant, eventCostUsd);
   const residencia = participant?.residencia || {};
   const iglesia = participant?.iglesia || {};
   const medicamentoDependiente = buildCampFlagValue(
@@ -228,8 +248,8 @@ export const buildParticipantReportRow = (participant, eventCostUsd) => {
     enfermedadDetalle: enfermedad.detail,
     actividadFisica: actividadFisica.label,
     actividadDetalle: actividadFisica.detail,
-    paymentStatus: buildPaymentStatusLabel(participant, eventCostUsd),
-    paymentStatusKey: getParticipantPaymentStatus(participant, eventCostUsd)?.key || "",
+    paymentStatus: reportPaymentStatus.label,
+    paymentStatusKey: reportPaymentStatus.key,
     exento: formatBoolean(participant?.exento),
     exentoFlag: Boolean(participant?.exento),
     montoPagado: Number(participant?.montoPagado || 0) || 0,
