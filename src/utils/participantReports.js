@@ -86,6 +86,31 @@ const getReportPaymentStatus = (participant, eventCostUsd) => {
   };
 };
 
+// Reune todas las formas de pago usadas por el participante: primero las lineas
+// estructuradas de pagosDetalle y, como respaldo, los campos legacy formaPago /
+// segundaFormaPago. Se excluye "Exento" porque no es un metodo de pago real.
+const getParticipantPaymentMethods = (participant) => {
+  const raw = [
+    ...(Array.isArray(participant?.pagosDetalle)
+      ? participant.pagosDetalle.map((line) => line?.methodName || line?.method)
+      : []),
+    participant?.formaPago,
+    participant?.segundaFormaPago,
+  ];
+
+  const seen = new Set();
+  const methods = [];
+  raw.forEach((value) => {
+    const name = String(value || "").trim();
+    if (!name || name.toLowerCase() === "exento") return;
+    const key = name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    methods.push(name);
+  });
+  return methods;
+};
+
 const buildCampFlagValue = (field) => ({
   active: Boolean(field?.respuesta),
   label: formatBoolean(field?.respuesta),
@@ -96,6 +121,7 @@ export const createDefaultParticipantReportFilters = () => ({
   search: "",
   statusFilter: "todos",
   tipoFilter: "todos",
+  formaPago: "todos",
   exentoFilter: "todos",
   minAge: "",
   maxAge: "",
@@ -115,6 +141,7 @@ export const participantReportColumns = [
   { id: "ci", label: "Cedula", defaultVisible: true, locked: true },
   { id: "tipoRegistro", label: "Tipo", defaultVisible: true },
   { id: "paymentStatus", label: "Estado de pago", defaultVisible: true },
+  { id: "formaPago", label: "Forma de pago", defaultVisible: true },
   { id: "exento", label: "Exento", defaultVisible: true },
   { id: "edad", label: "Edad", defaultVisible: true },
   { id: "telefonoMovil", label: "Telefono movil", defaultVisible: true },
@@ -194,6 +221,7 @@ export const buildParticipantReportRow = (participant, eventCostUsd) => {
     .filter(Boolean)
     .join(" ")
     .trim();
+  const paymentMethods = getParticipantPaymentMethods(participant);
 
   return {
     id: participant?.id || participant?._id || fullName || participant?.email || Math.random().toString(36),
@@ -250,6 +278,8 @@ export const buildParticipantReportRow = (participant, eventCostUsd) => {
     actividadDetalle: actividadFisica.detail,
     paymentStatus: reportPaymentStatus.label,
     paymentStatusKey: reportPaymentStatus.key,
+    formaPago: paymentMethods.join(", "),
+    formasPago: paymentMethods,
     exento: formatBoolean(participant?.exento),
     exentoFlag: Boolean(participant?.exento),
     montoPagado: Number(participant?.montoPagado || 0) || 0,
@@ -302,6 +332,10 @@ export const filterParticipantReportRows = (rows, filters) => {
     if (filters?.tipoFilter && filters.tipoFilter !== "todos") {
       if (row.tipoRegistro !== filters.tipoFilter) return false;
     }
+    if (filters?.formaPago && filters.formaPago !== "todos") {
+      const methods = Array.isArray(row.formasPago) ? row.formasPago : [];
+      if (!methods.includes(filters.formaPago)) return false;
+    }
     if (filters?.exentoFilter && filters.exentoFilter !== "todos") {
       if (!matchesToggle(filters.exentoFilter, row.exentoFlag)) return false;
     }
@@ -338,11 +372,21 @@ export const getParticipantReportFilterOptions = (rows) => {
       new Set((Array.isArray(rows) ? rows : []).map(selector).filter(Boolean))
     ).sort((a, b) => String(a).localeCompare(String(b), "es"));
 
+  const uniqueFromArrays = (selector) =>
+    Array.from(
+      new Set(
+        (Array.isArray(rows) ? rows : [])
+          .flatMap((row) => selector(row) || [])
+          .filter(Boolean)
+      )
+    ).sort((a, b) => String(a).localeCompare(String(b), "es"));
+
   return {
     tallas: unique((row) => row.talla),
     afiliaciones: unique((row) => row.afiliacion),
     municipios: unique((row) => row.municipio),
     zonas: unique((row) => row.zona),
     tiposRegistro: unique((row) => row.tipoRegistro),
+    formasPago: uniqueFromArrays((row) => row.formasPago),
   };
 };

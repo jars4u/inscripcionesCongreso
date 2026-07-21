@@ -133,6 +133,17 @@ export default function ParticipantReportFilters({
         </TextField>
         <TextField
           select
+          label="Forma de pago"
+          value={filters.formaPago}
+          onChange={updateField("formaPago")}
+          size="small"
+          fullWidth
+          sx={fieldSx}
+        >
+          {renderSelectOptions(options.formasPago || [])}
+        </TextField>
+        <TextField
+          select
           label="Exento"
           value={filters.exentoFilter}
           onChange={updateField("exentoFilter")}

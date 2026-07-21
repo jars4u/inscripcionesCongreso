@@ -75,7 +75,10 @@ export function ParticipantsProvider({ children }) {
       const abonados = (partialPaidSnap && partialPaidSnap.data && partialPaidSnap.data().count) || 0;
 
       const pagados = paidAmt + legacy;
-      let pendientes = total - ex - pagados;
+      // Pendientes = participantes SIN ningún abono. Se excluyen exentos, pagados
+      // y abonados (pago parcial), de modo que solo cuenta a quienes tienen
+      // montoPagado === 0 y no son exentos ni legacy.
+      let pendientes = total - ex - pagados - abonados;
       if (!Number.isFinite(pendientes) || pendientes < 0) pendientes = 0;
 
       setGlobalCounts({ total, exentos: ex, legacy, pagados, pendientes, abonados, loading: false });

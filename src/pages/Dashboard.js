@@ -93,6 +93,11 @@ const statusStyles = {
     color: "#35584E",
     borderColor: "#C7D1CD",
   },
+  abonado: {
+    backgroundColor: "#FBE6D2",
+    color: "#8A4A0E",
+    borderColor: "#E7C39C",
+  },
   pendiente: {
     backgroundColor: "#FFF0C2",
     color: "#7A5400",
@@ -151,11 +156,12 @@ function getParticipantStatus(participant, costoCongreso) {
   }
 
   if (monto < costoCongreso) {
+    // Pago parcial: es un abonado, no un pendiente (pendiente = sin ningún abono).
     return {
-      key: "pendiente",
-      label: `Pendiente $${(costoCongreso - monto).toFixed(2)}`,
-      shortLabel: "Pendiente",
-      sx: statusStyles.pendiente,
+      key: "abonado",
+      label: `Abonado · resta $${(costoCongreso - monto).toFixed(2)}`,
+      shortLabel: "Abonado",
+      sx: statusStyles.abonado,
     };
   }
 
@@ -537,7 +543,7 @@ export default function Dashboard() {
   const summaryCards = [
     {
       key: "todos",
-      title: "Total registrados",
+      title: "Registrados",
       icon: <PeopleOutlineIcon fontSize="small" />,
       value: totalParticipantes,
       caption: clientMode ? `${datosFiltrados.length} coinciden con el filtro` : (typeof globalCounts.total === 'number' && globalCounts.total > 0 ? `Base: ${data.length} en esta página · ${globalCounts.total} total` : (typeof totalCount === 'number' && totalCount > 0 ? `Base: ${data.length} en esta página · ${totalCount} total` : "Base completa")),
@@ -550,7 +556,7 @@ export default function Dashboard() {
       title: "Pagados",
       icon: <AttachMoneyIcon fontSize="small" />,
       value: typeof globalCounts.pagados === 'number' ? globalCounts.pagados : pagados,
-      caption: typeof globalCounts.pagados === 'number' ? (globalCounts.legacy > 0 ? `Incluye ${globalCounts.legacy} legacy` : "Pago completo o mayor") : (legacyPaidCount > 0 ? `Incluye ${legacyPaidCount} legacy` : "Pago completo o mayor"),
+      caption: typeof globalCounts.pagados === 'number' ? (globalCounts.legacy > 0 ? `Incluye ${globalCounts.legacy} legacy` : "Pago completo") : (legacyPaidCount > 0 ? `Incluye ${legacyPaidCount} legacy` : "Pago completo"),
       backgroundColor: "#046552",
       color: "#F7F3E8",
       borderColor: "#046552",
@@ -560,7 +566,7 @@ export default function Dashboard() {
       title: "Pendientes",
       icon: <PendingActionsIcon fontSize="small" />,
       value: typeof globalCounts.pendientes === 'number' ? globalCounts.pendientes : pendientes,
-      caption: "Requieren seguimiento",
+      caption: "Sin ningún abono",
       backgroundColor: "#FFBC00",
       color: "#1E1E1E",
       borderColor: "#D7A100",

@@ -231,12 +231,19 @@ export default function FinancialReport() {
 
   // Recompute counts using legacy->exento rule
   let pagadosCount = 0;
+  let abonadosCount = 0;
   let pendientesCount = 0;
   data.forEach((p) => {
     if (isLegacy(p)) return; // counted as exento
     const status = getParticipantPaymentStatus(p, costoCongreso);
+    const monto = Number(p.montoPagado) || 0;
     if (status.key === "pagado") pagadosCount += 1;
-    else if (status.key === "pendiente") pendientesCount += 1;
+    // El status base "pendiente" cubre todo monto < costo; lo dividimos:
+    // con abono parcial => abonado, sin ningún abono => pendiente.
+    else if (status.key === "pendiente") {
+      if (monto > 0) abonadosCount += 1;
+      else pendientesCount += 1;
+    }
   });
 
   const montoExentos = exentosCount * costoCongreso;
@@ -308,9 +315,16 @@ export default function FinancialReport() {
       color: "#F7F3E8",
     },
     {
+      label: "Abonados",
+      value: typeof globalCounts?.abonados === 'number' ? globalCounts.abonados : abonadosCount,
+      helper: "Pago parcial registrado",
+      backgroundColor: "#C96F12",
+      color: "#FFF7ED",
+    },
+    {
       label: "Pendientes",
       value: typeof globalCounts?.pendientes === 'number' ? globalCounts.pendientes : pendientesCount,
-      helper: "Por cobrar",
+      helper: "Sin ningún abono",
       backgroundColor: "#FFBC00",
       color: "#1E1E1E",
     },
@@ -492,7 +506,7 @@ export default function FinancialReport() {
                     display: "grid",
                     gridTemplateColumns: {
                       xs: "repeat(2, minmax(0, 1fr))",
-                      lg: "repeat(4, minmax(0, 1fr))",
+                      lg: "repeat(5, minmax(0, 1fr))",
                     },
                     gap: 1.5,
                   }}

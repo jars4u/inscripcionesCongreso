@@ -275,6 +275,7 @@ export function computeFinancialSummary(participants = [], eventCostUsd = 0, exc
   const totalParticipants = participants.length;
   let exentosCount = 0;
   let pagadosCount = 0;
+  let abonadosCount = 0;
   let pendientesCount = 0;
   let montoPagadoTotal = 0;
   let excedenteTotal = 0;
@@ -290,8 +291,14 @@ export function computeFinancialSummary(participants = [], eventCostUsd = 0, exc
     }
 
     montoPagadoTotal += paid;
+    const monto = Number(p?.montoPagado) || 0;
     if (status.key === 'pagado') pagadosCount += 1;
-    else if (status.key === 'pendiente') pendientesCount += 1;
+    else if (status.key === 'pendiente') {
+      // "pendiente" del status base cubre todo monto < costo; aquí lo dividimos:
+      // con abono parcial => abonado, sin ningún abono => pendiente.
+      if (monto > 0) abonadosCount += 1;
+      else pendientesCount += 1;
+    }
 
     if (paid > eventCostUsd) excedenteTotal += paid - eventCostUsd;
   });
@@ -303,6 +310,7 @@ export function computeFinancialSummary(participants = [], eventCostUsd = 0, exc
     totalParticipants,
     exentosCount,
     pagadosCount,
+    abonadosCount,
     pendientesCount,
     montoPagadoTotal,
     excedenteTotal,
